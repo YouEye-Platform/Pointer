@@ -1,0 +1,26 @@
+id: openai
+name: OpenAI
+type: openai-compatible
+baseUrl: https://api.openai.com/v1
+auth:
+  type: bearer
+  keyPrefix: "sk-"
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id
+    contextField: context_window

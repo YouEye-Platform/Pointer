@@ -1,0 +1,42 @@
+id: custom-google-gemini-compatible
+name: Custom Google Gemini-compatible Endpoint
+type: custom
+baseUrl: https://example.invalid
+endpoint:
+  mode: required
+  label: Gemini-compatible API endpoint
+  placeholder: https://ai.example.com
+auth:
+  type: header
+  header: x-goog-api-key
+
+endpoints:
+  models: /v1beta/models
+
+gateway:
+  operations:
+    generate:
+      format: google-generate-content
+      endpoint: /v1beta/models/{model}:generateContent
+    streamGenerate:
+      format: google-generate-content
+      endpoint: /v1beta/models/{model}:streamGenerateContent?alt=sse
+    countTokens:
+      format: google-generate-content
+      endpoint: /v1beta/models/{model}:countTokens
+    embedContent:
+      format: google-generate-content
+      endpoint: /v1beta/models/{model}:embedContent
+    batchEmbedContents:
+      format: google-generate-content
+      endpoint: /v1beta/models/{model}:batchEmbedContents
+
+models:
+  discovery:
+    enabled: true
+    listPath: models
+    idField: name
+    nameField: displayName
+    contextField: inputTokenLimit
+
+handler: google-gemini

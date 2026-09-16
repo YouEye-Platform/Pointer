@@ -1,0 +1,24 @@
+id: kimi
+name: Kimi (Moonshot AI)
+type: openai-compatible
+baseUrl: https://api.moonshot.ai/v1
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id
+    contextField: context_length

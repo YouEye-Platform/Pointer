@@ -1,0 +1,25 @@
+[Unit]
+Description=Pointer web
+After=network-online.target pointer-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pointer
+Group=pointer
+WorkingDirectory=/opt/pointer/current/web/apps/web
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+EnvironmentFile=-/opt/pointer/current/web/release.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

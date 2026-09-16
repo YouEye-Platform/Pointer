@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/YouEye-Platform/Pointer/main/packages/contracts/specs/management-api.v1.schema.json",
+  "title": "Pointer Management API v1",
+  "description": "Versioned response contracts for local model discovery and analytics. The separately versioned managed-host contract is authoritative at platform-api.v1.openapi.yaml. Null means unknown; zero is a measured value.",
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "required": ["source", "license", "fetchedAt"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "license": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": ["string", "null"], "format": "uri" },
+        "fetchedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "moneyPerMillionTokens": {
+      "type": "object",
+      "required": ["input", "output", "provenance"],
+      "properties": {
+        "input": { "type": ["number", "null"], "minimum": 0 },
+        "output": { "type": ["number", "null"], "minimum": 0 },
+        "cacheRead": { "type": ["number", "null"], "minimum": 0 },
+        "cacheWrite": { "type": ["number", "null"], "minimum": 0 },
+        "currency": { "const": "USD" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      },
+      "additionalProperties": false
+    },
+    "benchmark": {
+      "type": "object",
+      "required": ["benchmarkId", "sourceModel", "metrics", "provenance"],
+      "properties": {
+        "benchmarkId": { "type": "string", "minLength": 1 },
+        "sourceModel": { "type": "string" },
+        "metrics": { "type": "object", "additionalProperties": { "type": ["number", "string", "boolean", "null"] } },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      },
+      "additionalProperties": false
+    },
+    "sourceStatus": {
+      "type": "object",
+      "required": ["source", "status", "stale", "lastAttemptAt", "lastSuccessAt", "recordCount"],
+      "properties": {
+        "source": { "type": "string" },
+        "status": { "enum": ["never_synced", "syncing", "ok", "error"] },
+        "stale": { "type": "boolean" },
+        "lastAttemptAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastSuccessAt": { "type": ["string", "null"], "format": "date-time" },
+        "fetchedAt": { "type": ["string", "null"], "format": "date-time" },
+        "recordCount": { "type": "integer", "minimum": 0 },
+        "error": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "providerModel": {
+      "type": "object",
+      "required": ["providerModelKey", "providerId", "providerName", "rawModelId", "available", "pricing", "accounts"],
+      "properties": {
+        "providerModelKey": { "type": "string" },
+        "providerId": { "type": "string" },
+        "providerName": { "type": "string" },
+        "providerIconKey": { "type": ["string", "null"] },
+        "rawModelId": { "type": "string" },
+        "available": { "type": "boolean" },
+        "pricing": { "anyOf": [{ "$ref": "#/$defs/moneyPerMillionTokens" }, { "type": "null" }] },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "nickname"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "nickname": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelSummary": {
+      "type": "object",
+      "required": ["id", "slug", "name", "aliases", "capabilities", "providerCount", "availableProviderCount", "sourceStatus"],
+      "properties": {
+        "id": { "type": "string" },
+        "slug": { "type": "string" },
+        "name": { "type": "string" },
+        "creator": { "type": ["string", "null"] },
+        "creatorIconKey": { "type": ["string", "null"] },
+        "modelIconKey": { "type": ["string", "null"] },
+        "aliases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "contextWindow": { "type": ["integer", "null"], "minimum": 1 },
+        "maxOutput": { "type": ["integer", "null"], "minimum": 1 },
+        "referencePricing": { "anyOf": [{ "$ref": "#/$defs/moneyPerMillionTokens" }, { "type": "null" }] },
+        "providerCount": { "type": "integer", "minimum": 0 },
+        "availableProviderCount": { "type": "integer", "minimum": 0 },
+        "sourceStatus": { "type": "array", "items": { "$ref": "#/$defs/sourceStatus" } }
+      },
+      "additionalProperties": false
+    },
+    "catalogList": {
+      "type": "object",
+      "required": ["contractVersion", "items", "page", "pageSize", "total"],
+      "properties": {
+        "contractVersion": { "const": "1" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/modelSummary" } },
+        "page": { "type": "integer", "minimum": 1 },
+        "pageSize": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "total": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "catalogDetail": {
+      "allOf": [
+        { "$ref": "#/$defs/modelSummary" },
+        {
+          "type": "object",
+          "required": ["description", "providers", "benchmarks"],
+          "properties": {
+            "description": { "type": ["string", "null"] },
+            "providers": { "type": "array", "items": { "$ref": "#/$defs/providerModel" } },
+            "benchmarks": { "type": "array", "items": { "$ref": "#/$defs/benchmark" } }
+          }
+        }
+      ]
+    },
+    "providerDetail": {
+      "type": "object",
+      "required": ["id", "name", "status", "authType", "hasCredential", "models", "sourceStatus"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "iconKey": { "type": ["string", "null"] },
+        "status": { "enum": ["active", "error", "disabled"] },
+        "authType": { "type": "string" },
+        "hasCredential": { "type": "boolean" },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/providerModel" } },
+        "sourceStatus": { "type": "array", "items": { "$ref": "#/$defs/sourceStatus" } }
+      },
+      "additionalProperties": false
+    },
+    "statistics": {
+      "type": "object",
+      "required": ["from", "to", "sampleSize", "requests", "errors", "inputTokens", "outputTokens", "costUsd", "latencyMs", "ttfbMs", "tokensPerSecond"],
+      "properties": {
+        "from": { "type": "string", "format": "date-time" },
+        "to": { "type": "string", "format": "date-time" },
+        "sampleSize": { "type": "integer", "minimum": 0 },
+        "requests": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "costUsd": { "type": ["number", "null"], "minimum": 0 },
+        "latencyMs": { "type": ["object", "null"], "additionalProperties": { "type": "number", "minimum": 0 } },
+        "ttfbMs": { "type": ["object", "null"], "additionalProperties": { "type": "number", "minimum": 0 } },
+        "tokensPerSecond": { "type": ["number", "null"], "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

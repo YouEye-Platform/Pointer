@@ -1,0 +1,29 @@
+id: mistral
+name: Mistral AI
+type: openai-compatible
+baseUrl: https://api.mistral.ai/v1
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id
+    contextField: max_context_length
+    filters:
+      - path: capabilities.completion_chat
+        equals: true
+      - path: archived
+        notEquals: true

@@ -1,0 +1,25 @@
+[Unit]
+Description=Pointer server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pointer
+Group=pointer
+WorkingDirectory=/opt/pointer/current/server
+EnvironmentFile=/etc/pointer/server.env
+EnvironmentFile=-/opt/pointer/current/server/release.env
+ExecStart=/usr/local/bin/bun run src/index.ts
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pointer
+
+[Install]
+WantedBy=multi-user.target

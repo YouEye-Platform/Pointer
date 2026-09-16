@@ -1,0 +1,69 @@
+#!/bin/bash
+set -euo pipefail
+
+fail() { printf 'pointer-build: %s\n' "$*" >&2; exit 1; }
+require() { command -v "$1" >/dev/null 2>&1 || fail "required command is missing: $1"; }
+
+source_dir=${YOUEYE_SOURCE_DIR:-}
+output_dir=${YOUEYE_OUTPUT_DIR:-}
+work_dir=${YOUEYE_WORK_DIR:-}
+source_commit=${YOUEYE_SOURCE_COMMIT:-}
+source_epoch=${SOURCE_DATE_EPOCH:-}
+[[ -d $source_dir ]] || fail 'YOUEYE_SOURCE_DIR must be an existing source directory'
+[[ -n $output_dir && $output_dir != / && $output_dir != "$source_dir" ]] || fail 'YOUEYE_OUTPUT_DIR must be dedicated'
+[[ -n $work_dir && $work_dir != / && $work_dir != "$source_dir" ]] || fail 'YOUEYE_WORK_DIR must be dedicated'
+[[ $source_commit =~ ^[0-9a-f]{40}$ ]] || fail 'YOUEYE_SOURCE_COMMIT must be exact'
+[[ $source_epoch =~ ^[1-9][0-9]*$ ]] || fail 'SOURCE_DATE_EPOCH must be positive'
+if [[ -d $source_dir/.git ]]; then
+  [[ $(git -C "$source_dir" rev-parse HEAD) == "$source_commit" ]] || fail 'checked-out commit does not match contract'
+else
+  # Permanent executor receives a credential-free git-archive export, not a live checkout.
+  [[ -f $source_dir/apps/server/package.json ]] || fail 'credential-free source export is incomplete'
+fi
+require node
+require pnpm
+require bun
+require tar
+[[ $(node --version) == v22.23.2 ]] || fail 'Node 22.23.2 is required'
+[[ $(pnpm --version) == 10.6.2 ]] || fail 'pnpm 10.6.2 is required'
+[[ $(bun --version) == 1.3.* ]] || fail 'Bun 1.3.x is required'
+[[ -n ${YOUEYE_PNPM_STORE_DIR:-} && -d $YOUEYE_PNPM_STORE_DIR ]] || fail 'reviewed pnpm store is required'
+
+export LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC YOUEYE_SOURCE_BRANCH YOUEYE_SOURCE_REPOSITORY
+# The recipe supplies the exact source commit. A checkout URL is optional and is
+# recorded separately from the public product identity in release-manifest.json.
+node --input-type=module -e 'const { buildSourceRepository } = await import(process.argv[1]); buildSourceRepository(process.env.YOUEYE_SOURCE_REPOSITORY);' "file://$source_dir/scripts/release-identity.mjs"
+if [[ -z ${YOUEYE_SOURCE_BRANCH:-} ]]; then
+  if [[ -d $source_dir/.git ]]; then
+    YOUEYE_SOURCE_BRANCH=$(git -C "$source_dir" branch --show-current)
+  else
+    YOUEYE_SOURCE_BRANCH=detached
+  fi
+fi
+stage=$work_dir/pointer-standalone
+rm -rf -- "$stage"
+install -d -m 0755 "$stage" "$output_dir"
+cd "$source_dir"
+pnpm install --frozen-lockfile --offline --package-import-method=copy --store-dir "$YOUEYE_PNPM_STORE_DIR"
+pnpm public-source:check
+pnpm typecheck
+pnpm contracts:check
+bun build apps/server/src/index.ts --target=bun --outfile="$stage/server.js"
+bun build apps/server/scripts/migrate.ts --target=bun --outfile="$stage/migrate.js"
+cp "$(command -v bun)" "$stage/bun"
+chmod 0755 "$stage/bun"
+cp apps/server/package.json "$stage/package.json"
+cp -a apps/server/drizzle "$stage/drizzle"
+cp -a apps/server/providers.d "$stage/providers.d"
+find "$stage/providers.d" -type f -name '*.test.ts' -delete
+node scripts/write-youeye-release-manifest.mjs "$stage"
+
+temporary=$work_dir/standalone.tar.partial
+output=$output_dir/standalone.tar
+rm -f -- "$temporary" "$output"
+tar --sort=name --format=posix --numeric-owner --owner=0 --group=0 \
+  --mtime="@$source_epoch" --pax-option=delete=atime,delete=ctime \
+  -C "$stage" -cf "$temporary" .
+tar -tf "$temporary" ./bun ./server.js ./migrate.js ./release-manifest.json >/dev/null
+mv -- "$temporary" "$output"
+sha256sum "$output"

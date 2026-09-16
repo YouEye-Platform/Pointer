@@ -1,0 +1,38 @@
+id: xai-grok
+name: Grok Subscription
+type: openai-compatible
+baseUrl: https://cli-chat-proxy.grok.com/v1
+auth:
+  type: oauth-device-flow
+  clientId: b1a00492-073a-47ea-816f-4c329264a828
+  issuer: https://auth.x.ai
+  scopes: openid profile email offline_access grok-cli:access api:access
+  connectLabel: Connect Grok subscription
+
+endpoints:
+  chatCompletions: /chat/completions
+  messages: /messages
+  responses: /responses
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+handler: xai-grok
+handlerConfig:
+  clientVersion: 0.2.112
+  clientIdentifier: pointer
+  clientMode: headless
+
+models:
+  capabilityFallbacks:
+    - modelId: grok-4.5
+      supportsVision: true
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: name

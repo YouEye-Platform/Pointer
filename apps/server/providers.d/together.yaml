@@ -1,0 +1,38 @@
+id: together
+name: Together AI
+type: openai-compatible
+baseUrl: https://api.together.xyz/v1
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+balance:
+  url: https://api.together.xyz/v1/billing/balance
+  parser:
+    path: balance
+    currency: USD
+  pollInterval: 3600
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: display_name
+    contextField: context_length
+    pricingPath: pricing
+    inputPriceField: input
+    outputPriceField: output
+    pricePerMillion: true
+    filters:
+      - path: type
+        equals: chat

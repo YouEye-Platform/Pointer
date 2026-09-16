@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/YouEye-Platform/Pointer/main/packages/contracts/specs/catalog.v1.schema.json",
+  "title": "Pointer catalog v1 contracts",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/corpus" },
+    { "$ref": "#/$defs/apiListResponse" },
+    { "$ref": "#/$defs/apiDetailResponse" }
+  ],
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "sourceUrl", "license", "fetchedAt"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "license": { "type": "string", "minLength": 1 },
+        "fetchedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceId", "sourceRecordKey", "kind", "nativeId", "observedName", "organizationHint", "providerId", "attributes", "provenance", "active"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "sourceRecordKey": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["reference_model", "provider_model", "benchmark_model"] },
+        "nativeId": { "type": "string", "minLength": 1 },
+        "observedName": { "type": ["string", "null"] },
+        "organizationHint": { "type": ["string", "null"] },
+        "providerId": { "type": ["string", "null"] },
+        "attributes": { "type": "object" },
+        "provenance": { "oneOf": [{ "$ref": "#/$defs/provenance" }, { "type": "null" }] },
+        "active": { "type": "boolean" }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slug", "preferredName", "organizationId", "active"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "slug": { "type": "string", "minLength": 1 },
+        "preferredName": { "type": "string", "minLength": 1 },
+        "organizationId": { "type": ["string", "null"] },
+        "active": { "type": "boolean" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observationId", "entityId", "state", "method", "confidence", "candidateEntityIds", "evidence", "resolverVersion"],
+      "properties": {
+        "observationId": { "type": "string", "minLength": 1 },
+        "entityId": { "type": ["string", "null"] },
+        "state": { "enum": ["linked", "ambiguous", "unresolved", "rejected"] },
+        "method": { "enum": ["native_id", "crosswalk", "approved_alias", "structured_match", "reviewed_override", "none"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "candidateEntityIds": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "resolverVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "aliases", "websiteUrl"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "websiteUrl": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "organizationId", "kind", "mediaType", "contentHash", "sourceUrl", "license", "fetchedAt", "active"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "organizationId": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["icon", "logo"] },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "contentHash": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "license": { "type": "string", "minLength": 1 },
+        "fetchedAt": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "providerRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "providerId", "providerModelId", "entityId", "active"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "providerId": { "type": "string", "minLength": 1 },
+        "providerModelId": { "type": "string", "minLength": 1 },
+        "entityId": { "type": ["string", "null"] },
+        "active": { "type": "boolean" }
+      }
+    },
+    "benchmarkLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "benchmarkId", "sourceModel", "entityId", "provenance"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "benchmarkId": { "type": "string", "minLength": 1 },
+        "sourceModel": { "type": "string", "minLength": 1 },
+        "entityId": { "type": ["string", "null"] },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "alias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "alias", "entityId", "explicit"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "alias": { "type": "string", "minLength": 1 },
+        "entityId": { "type": "string", "minLength": 1 },
+        "explicit": { "type": "boolean" }
+      }
+    },
+    "sourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "health", "lastAttemptAt", "lastSuccessAt", "recordCount", "errorCode", "errorMessage"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "health": { "enum": ["healthy", "degraded", "stale", "unavailable", "never_synced"] },
+        "lastAttemptAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastSuccessAt": { "type": ["string", "null"], "format": "date-time" },
+        "recordCount": { "type": "integer", "minimum": 0 },
+        "errorCode": { "type": ["string", "null"] },
+        "errorMessage": { "type": ["string", "null"] }
+      }
+    },
+    "apiSourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "status", "stale", "lastAttemptAt", "lastSuccessAt", "fetchedAt", "recordCount", "error"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["never_synced", "disabled", "syncing", "ok", "error"] },
+        "stale": { "type": "boolean" },
+        "lastAttemptAt": { "type": ["string", "null"], "format": "date-time" },
+        "lastSuccessAt": { "type": ["string", "null"], "format": "date-time" },
+        "fetchedAt": { "type": ["string", "null"], "format": "date-time" },
+        "recordCount": { "type": "integer", "minimum": 0 },
+        "error": {
+          "oneOf": [
+            { "type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": { "code": { "type": "string", "minLength": 1 }, "message": { "type": "string", "minLength": 1 } } },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "benchmarkDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "description", "sourceUrl", "license", "scoreMetric", "rankMetric", "unit", "higherIsBetter", "defaultVisible", "rankingPriority", "attribution"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "sourceUrl": { "type": "string", "format": "uri" },
+        "license": { "type": "string", "minLength": 1 },
+        "scoreMetric": { "type": "string", "minLength": 1 },
+        "rankMetric": { "type": ["string", "null"] },
+        "unit": { "enum": ["points", "percent", "rank"] },
+        "higherIsBetter": { "type": "boolean" },
+        "defaultVisible": { "type": "boolean" },
+        "rankingPriority": { "type": ["integer", "null"], "minimum": 0 },
+        "attribution": { "type": ["string", "null"] }
+      }
+    },
+    "legacyPresentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entityId", "currentName", "currentCreator", "currentCreatorIconKey", "currentLogoUrl", "iconOutcome"],
+      "properties": {
+        "entityId": { "type": "string", "minLength": 1 },
+        "currentName": { "type": "string", "minLength": 1 },
+        "currentCreator": { "type": ["string", "null"] },
+        "currentCreatorIconKey": { "type": ["string", "null"] },
+        "currentLogoUrl": { "type": ["string", "null"], "format": "uri" },
+        "iconOutcome": { "enum": ["logo_url", "icon_key", "fallback"] }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpusVersion", "generatedAt", "observations", "entities", "decisions", "organizations", "assets", "providerRoutes", "benchmarkLinks", "aliases", "sources", "legacyPresentation"],
+      "properties": {
+        "corpusVersion": { "const": "1" },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "observations": { "type": "array", "items": { "$ref": "#/$defs/observation" } },
+        "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+        "organizations": { "type": "array", "items": { "$ref": "#/$defs/organization" } },
+        "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+        "providerRoutes": { "type": "array", "items": { "$ref": "#/$defs/providerRoute" } },
+        "benchmarkLinks": { "type": "array", "items": { "$ref": "#/$defs/benchmarkLink" } },
+        "aliases": { "type": "array", "items": { "$ref": "#/$defs/alias" } },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceState" } },
+        "legacyPresentation": { "type": "array", "items": { "$ref": "#/$defs/legacyPresentation" } }
+      }
+    },
+    "apiItemFields": {
+      "type": "object",
+      "required": ["id", "slug", "name", "nameProvenance", "creator", "creatorIconKey", "modelIconKey", "description", "contextWindow", "maxOutput", "capabilities", "referencePricing", "providerCount", "availableProviderCount", "available", "providers", "aliases", "metadataSource", "metadataFetchedAt", "organization", "asset", "routes", "benchmarks", "recommendedRanking", "supportedByActiveObservation"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "slug": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "nameProvenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceId", "observationId", "sourceKind", "originalValue", "selectedValue", "fetchedAt", "creatorPrefixRemoved"],
+          "properties": {
+            "sourceId": { "type": ["string", "null"] },
+            "observationId": { "type": ["string", "null"] },
+            "sourceKind": { "enum": ["reference_model", "provider_model", "benchmark_model", "reviewed_override", "fallback"] },
+            "originalValue": { "type": "string", "minLength": 1 },
+            "selectedValue": { "type": "string", "minLength": 1 },
+            "fetchedAt": { "type": ["string", "null"], "format": "date-time" },
+            "creatorPrefixRemoved": { "type": ["string", "null"] }
+          }
+        },
+        "creator": { "type": ["string", "null"] },
+        "creatorIconKey": { "type": ["string", "null"] },
+        "modelIconKey": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "contextWindow": { "type": ["integer", "null"], "minimum": 0 },
+        "maxOutput": { "type": ["integer", "null"], "minimum": 0 },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reasoning", "vision", "tools", "streaming"],
+          "properties": { "reasoning": { "type": "boolean" }, "vision": { "type": "boolean" }, "tools": { "type": "boolean" }, "streaming": { "type": "boolean" } }
+        },
+        "referencePricing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["input", "output", "currency", "source", "fetchedAt"],
+          "properties": {
+            "input": { "type": ["number", "null"], "minimum": 0 },
+            "output": { "type": ["number", "null"], "minimum": 0 },
+            "currency": { "const": "USD" },
+            "source": { "type": ["string", "null"] },
+            "fetchedAt": { "type": ["string", "null"], "format": "date-time" }
+          }
+        },
+        "providerCount": { "type": "integer", "minimum": 0 },
+        "availableProviderCount": { "type": "integer", "minimum": 0 },
+        "available": { "type": "boolean" },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["providerModelKey", "providerId", "providerName", "providerIconKey", "rawModelId", "pricing", "capabilities", "contextWindow", "maxOutput", "available", "accounts"],
+            "properties": {
+              "providerModelKey": { "type": "string", "minLength": 1 },
+              "providerId": { "type": "string", "minLength": 1 },
+              "providerName": { "type": "string", "minLength": 1 },
+              "providerIconKey": { "type": ["string", "null"] },
+              "rawModelId": { "type": "string", "minLength": 1 },
+              "pricing": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input", "output", "currency", "source", "fetchedAt"],
+                "properties": {
+                  "input": { "type": ["number", "null"], "minimum": 0 },
+                  "output": { "type": ["number", "null"], "minimum": 0 },
+                  "currency": { "const": "USD" },
+                  "source": { "type": ["string", "null"] },
+                  "fetchedAt": { "type": ["string", "null"], "format": "date-time" }
+                }
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["tools", "vision", "streaming"],
+                "properties": { "tools": { "type": "boolean" }, "vision": { "type": "boolean" }, "streaming": { "type": "boolean" } }
+              },
+              "contextWindow": { "type": ["integer", "null"], "minimum": 0 },
+              "maxOutput": { "type": ["integer", "null"], "minimum": 0 },
+              "available": { "type": "boolean" },
+              "accounts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["id", "nickname"],
+                  "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "nickname": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "aliases": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["source", "alias", "provenance"], "properties": { "source": { "type": "string", "minLength": 1 }, "alias": { "type": "string", "minLength": 1 }, "provenance": {} } } },
+        "metadataSource": { "type": ["string", "null"] },
+        "metadataFetchedAt": { "type": ["string", "null"], "format": "date-time" },
+        "organization": { "oneOf": [{ "$ref": "#/$defs/organization" }, { "type": "null" }] },
+        "asset": { "oneOf": [{ "$ref": "#/$defs/asset" }, { "type": "null" }] },
+        "routes": { "type": "array", "items": { "$ref": "#/$defs/providerRoute" } },
+        "benchmarks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "benchmarkId", "sourceModel", "entityId", "provenance", "metrics", "fetchedAt", "presentation"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "benchmarkId": { "type": "string", "minLength": 1 },
+              "sourceModel": { "type": "string", "minLength": 1 },
+              "entityId": { "type": ["string", "null"] },
+              "provenance": { "$ref": "#/$defs/provenance" },
+              "metrics": {
+                "type": "object",
+                "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+              },
+              "fetchedAt": { "type": "string", "format": "date-time" },
+              "presentation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "score", "rank", "effectiveRank", "rankDerived", "population", "percentile", "unit", "higherIsBetter"],
+                "properties": {
+                  "label": { "type": "string", "minLength": 1 },
+                  "score": { "type": ["number", "null"] },
+                  "rank": { "type": ["number", "null"] },
+                  "effectiveRank": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                  "rankDerived": { "type": "boolean" },
+                  "population": { "type": ["integer", "null"], "minimum": 1 },
+                  "percentile": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                  "unit": { "enum": ["points", "percent", "rank"] },
+                  "higherIsBetter": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "recommendedRanking": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["method", "rank", "percentile", "coverage", "eligibleSources", "sources"],
+              "properties": {
+                "method": { "const": "mean_percentile" },
+                "rank": { "type": "integer", "minimum": 1 },
+                "percentile": { "type": "number", "minimum": 0, "maximum": 1 },
+                "coverage": { "type": "integer", "minimum": 1 },
+                "eligibleSources": { "type": "integer", "minimum": 1 },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["sourceId", "sourceLabel", "rank", "publishedRank", "rankDerived", "population", "percentile", "score", "attribution"],
+                    "properties": {
+                      "sourceId": { "type": "string", "minLength": 1 },
+                      "sourceLabel": { "type": "string", "minLength": 1 },
+                      "rank": { "type": "number", "exclusiveMinimum": 0 },
+                      "publishedRank": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                      "rankDerived": { "type": "boolean" },
+                      "population": { "type": "integer", "minimum": 1 },
+                      "percentile": { "type": "number", "minimum": 0, "maximum": 1 },
+                      "score": { "type": ["number", "null"] },
+                      "attribution": { "type": ["string", "null"] }
+                    }
+                  }
+                }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "supportedByActiveObservation": { "type": "boolean" }
+      }
+    },
+    "apiItem": {
+      "allOf": [{ "$ref": "#/$defs/apiItemFields" }],
+      "unevaluatedProperties": false
+    },
+    "apiEnvelope": {
+      "type": "object",
+      "required": ["contractVersion", "snapshotId", "generatedAt", "benchmarkDescriptors", "ranking", "sources"],
+      "properties": {
+        "contractVersion": { "const": "1" },
+        "snapshotId": { "type": "string", "minLength": 1 },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "benchmarkDescriptors": { "type": "array", "items": { "$ref": "#/$defs/benchmarkDescriptor" } },
+        "ranking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sort", "method", "sourceIds"],
+          "properties": {
+            "sort": { "const": "recommended" },
+            "method": { "const": "mean_percentile" },
+            "sourceIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/apiSourceState" } }
+      }
+    },
+    "apiListResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/apiEnvelope" },
+        {
+          "type": "object",
+          "required": ["items", "page", "pageSize", "total", "facets"],
+          "properties": {
+            "items": { "type": "array", "items": { "$ref": "#/$defs/apiItem" } },
+            "page": { "type": "integer", "minimum": 1 },
+            "pageSize": { "type": "integer", "minimum": 1, "maximum": 200 },
+            "total": { "type": "integer", "minimum": 0 },
+            "facets": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["creators", "providers"],
+              "properties": {
+                "creators": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "providers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["id", "name", "available"],
+                    "properties": {
+                      "id": { "type": "string", "minLength": 1 },
+                      "name": { "type": "string", "minLength": 1 },
+                      "available": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "apiDetailResponse": {
+      "allOf": [
+        { "$ref": "#/$defs/apiEnvelope" },
+        { "$ref": "#/$defs/apiItemFields" }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

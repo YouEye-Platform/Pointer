@@ -1,0 +1,27 @@
+id: custom-anthropic-compatible
+name: Custom Anthropic-compatible Endpoint
+type: anthropic-compatible
+baseUrl: https://example.invalid
+endpoint:
+  mode: required
+  label: Anthropic-compatible API endpoint
+  placeholder: https://ai.example.com
+auth:
+  type: bearer
+
+endpoints:
+  messages: /v1/messages
+  models: /v1/models
+
+gateway:
+  operations:
+    generate:
+      format: messages
+      endpoint: /v1/messages
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: display_name

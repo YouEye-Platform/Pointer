@@ -1,0 +1,5 @@
+import { metric, type StatsResponse } from "@/lib/stats";
+
+export function RecentActivity({ rows }: { rows: StatsResponse["recent"] }) {
+  return <div className="card table-scroll"><table><thead><tr><th>Time</th><th>Model</th><th>Provider</th><th>Source</th><th>Tokens</th><th>Cost</th><th>Latency / TTFB</th><th>Throughput</th><th>Outcome</th></tr></thead><tbody>{rows.length ? rows.map((row) => <tr key={row.id}><td>{new Date(row.createdAt).toLocaleString()}</td><td className="mono">{row.modelId}</td><td>{row.providerId}</td><td><span className="badge">{row.source}</span></td><td>{row.inputTokens ?? "-"} / {row.outputTokens ?? "-"}</td><td>{row.costUsd == null ? "Unknown" : `$${row.costUsd.toFixed(5)}`}</td><td>{row.latencyMs ?? "-"} / {row.ttfbMs ?? "-"} ms</td><td>{metric(row.tokensPerSecond, " t/s")}</td><td className={row.outcome === "success" ? "success" : "danger"}>{row.outcome}</td></tr>) : <tr><td colSpan={9} className="muted">No traffic in this range.</td></tr>}</tbody></table></div>;
+}

@@ -1,0 +1,24 @@
+[Unit]
+Description=Pointer same-origin router
+After=network-online.target pointer-server.service pointer-web.service
+Wants=network-online.target
+Requires=pointer-server.service pointer-web.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -ec 'for attempt in $(seq 1 60); do /usr/bin/curl --max-time 2 -fsS http://127.0.0.1:4000/healthz >/dev/null && exit 0; sleep 1; done; exit 1'
+ExecStartPre=/bin/sh -ec 'for attempt in $(seq 1 60); do /usr/bin/curl --max-time 2 -fsS http://127.0.0.1:3000/_pointer/web/healthz >/dev/null && exit 0; sleep 1; done; exit 1'
+ExecStartPre=/usr/sbin/nginx -t -c /etc/pointer/router.conf
+ExecStart=/usr/sbin/nginx -c /etc/pointer/router.conf -g "daemon off;"
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGQUIT
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run
+
+[Install]
+WantedBy=multi-user.target

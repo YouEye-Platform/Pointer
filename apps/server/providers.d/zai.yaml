@@ -1,0 +1,23 @@
+id: zai
+name: Z.ai
+type: openai-compatible
+baseUrl: https://api.z.ai/api/paas/v4
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id

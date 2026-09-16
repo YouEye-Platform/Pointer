@@ -1,0 +1,28 @@
+id: deepinfra
+name: DeepInfra
+type: openai-compatible
+baseUrl: https://api.deepinfra.com/v1/openai
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id
+    contextField: metadata.context_length
+    pricingPath: metadata.pricing
+    inputPriceField: input_tokens
+    outputPriceField: output_tokens
+    pricePerMillion: true

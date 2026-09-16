@@ -1,0 +1,23 @@
+id: sambanova
+name: SambaNova
+type: openai-compatible
+baseUrl: https://api.sambanova.ai/v1
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id

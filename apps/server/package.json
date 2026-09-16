@@ -1,0 +1,40 @@
+{
+  "name": "@pointer/server",
+  "version": "0.5.1",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "DATABASE_URL=\"${DATABASE_URL:-postgresql:///pointer_unit_test}\" JWT_SECRET=\"${JWT_SECRET:-test-secret-do-not-use-in-prod}\" ENCRYPTION_SECRET=\"${ENCRYPTION_SECRET:-test-encryption-secret-do-not-use-in-prod}\" CORS_ORIGIN=\"${CORS_ORIGIN:-http://localhost:3000}\" bun test --max-concurrency=1",
+    "test:catalog-postgres": "CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-reconciliation.postgres.test.ts src/services/benchmark-credentials.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/routes/model-groups.postgres.test.ts src/routes/providers.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-termination.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-sync.postgres.test.ts",
+    "test:managed-postgres": "MANAGED_POSTGRES_TEST=1 bun test src/services/managed-platform.postgres.test.ts --max-concurrency=1",
+    "test:postgres": "pnpm test:catalog-postgres && pnpm test:managed-postgres",
+    "test:alias-e2e": "bun run scripts/alias-e2e.ts",
+    "catalog:analyze": "bun run scripts/catalog-health.ts",
+    "catalog:export": "bun run scripts/export-catalog-corpus.ts",
+    "db:migrate": "bun run scripts/migrate.ts",
+    "db:migrate:check": "bun run scripts/migrate.ts --check",
+    "db:push": "drizzle-kit push && bun run scripts/apply-schema-integrity.ts",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@pointer/contracts": "workspace:*",
+    "drizzle-kit": "^0.31.0",
+    "drizzle-orm": "^0.44.0",
+    "eventsource-parser": "^3.0.0",
+    "hono": "^4.7.0",
+    "hyparquet": "^1.26.2",
+    "jose": "^6.0.0",
+    "nanoid": "^5.1.0",
+    "postgres": "^3.4.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@google/genai": "1.30.0",
+    "@types/bun": "^1.2.0",
+    "typescript": "5.9.3"
+  }
+}

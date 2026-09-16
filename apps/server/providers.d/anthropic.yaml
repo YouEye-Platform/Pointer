@@ -1,0 +1,30 @@
+id: anthropic
+name: Anthropic
+type: anthropic-compatible
+baseUrl: https://api.anthropic.com
+auth:
+  type: bearer
+  keyPrefix: "sk-ant-"
+
+endpoints:
+  messages: /v1/messages
+  models: /v1/models
+
+gateway:
+  operations:
+    generate:
+      format: messages
+      endpoint: /v1/messages
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: display_name
+    pagination:
+      cursorParam: after_id
+      cursorPath: last_id
+      hasMorePath: has_more
+      pageSizeParam: limit
+      pageSize: 1000

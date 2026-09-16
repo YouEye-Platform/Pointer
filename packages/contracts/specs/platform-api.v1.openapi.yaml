@@ -1,0 +1,802 @@
+openapi: 3.1.0
+info:
+  title: Pointer managed platform API
+  version: 1.0.0
+  description: |
+    The server-wide administrative contract used by a trusted host platform.
+    It is exposed only by Pointer's managed management listener. Raw Pointer
+    credentials appear only in a time-limited CredentialDelivery returned by
+    ensure or rotation prepare, and must be acknowledged after protected
+    storage.
+servers:
+  - url: http://127.0.0.1:4001/api/platform/v1
+    description: Example host-only management listener
+security:
+  - PlatformAssertion: []
+paths:
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      responses:
+        "200":
+          description: Managed contract and protocol capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+        default:
+          $ref: "#/components/responses/Error"
+  /groups:
+    get:
+      operationId: listGroups
+      parameters:
+        - name: owner
+          in: query
+          schema:
+            type: string
+            enum: [service, actor]
+            default: service
+      responses:
+        "200":
+          description: Groups owned by the managed service principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupList"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations:
+    get:
+      operationId: listInstallations
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/InstallationState"
+      responses:
+        "200":
+          description: Cursor-paginated managed installations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallationList"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    get:
+      operationId: getInstallation
+      responses:
+        "200":
+          description: Current reconciled installation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installation"
+        default:
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: ensureInstallation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnsureInstallationRequest"
+      responses:
+        "200":
+          description: Existing installation reconciled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallationWithDelivery"
+        "201":
+          description: Installation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallationWithDelivery"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: archiveInstallation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Installation archived and credentials revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchiveReceipt"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/group:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    patch:
+      operationId: changeInstallationGroup
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groupId]
+              properties:
+                groupId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+              additionalProperties: false
+      responses:
+        "200":
+          description: Installation with its new live group route
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installation"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/routing-owner/takeover:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    post:
+      operationId: takeOverInstallationRoutingOwner
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [groupId]
+              properties:
+                groupId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+              additionalProperties: false
+      responses:
+        "200":
+          description: Installation explicitly transferred to the assertion actor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installation"
+        default:
+          $ref: "#/components/responses/Error"
+  /actors/current/state:
+    put:
+      operationId: changeCurrentActorState
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActorStateRequest"
+      responses:
+        "200":
+          description: Current assertion actor state changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorStateReceipt"
+        default:
+          $ref: "#/components/responses/Error"
+  /actors/state:
+    put:
+      operationId: changeManagedActorState
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagedActorStateRequest"
+      responses:
+        "200":
+          description: Exact external actor disabled, restored, or already absent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActorStateReceipt"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/disable:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    post:
+      operationId: disableInstallation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Disabled installation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installation"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/enable:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    post:
+      operationId: enableInstallation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Enabled installation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Installation"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/credential-deliveries/{deliveryId}/ack:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+      - name: deliveryId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+    post:
+      operationId: acknowledgeCredentialDelivery
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Delivery acknowledged and encrypted payload purged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [installationId, deliveryId, acknowledged]
+                properties:
+                  installationId:
+                    type: string
+                  deliveryId:
+                    type: string
+                  acknowledged:
+                    const: true
+                additionalProperties: false
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/rotations:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+    post:
+      operationId: prepareCredentialRotation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Existing prepare result recovered idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotationPrepared"
+        "201":
+          description: Replacement credential prepared alongside the active credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotationPrepared"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/rotations/{rotationId}/commit:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+      - $ref: "#/components/parameters/RotationId"
+    post:
+      operationId: commitCredentialRotation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Acknowledged replacement committed and prior credential retired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotationFinished"
+        default:
+          $ref: "#/components/responses/Error"
+  /installations/{externalInstallationId}/rotations/{rotationId}/abort:
+    parameters:
+      - $ref: "#/components/parameters/ExternalInstallationId"
+      - $ref: "#/components/parameters/RotationId"
+    post:
+      operationId: abortCredentialRotation
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Pending credential revoked and prior credential preserved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotationFinished"
+        default:
+          $ref: "#/components/responses/Error"
+components:
+  securitySchemes:
+    PlatformAssertion:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Short-lived asymmetric assertion issued for the configured Pointer
+        server subject. Required claims are iss, aud, sub, iat, exp, jti, act,
+        pointer_admin=true, and pointer_permissions.
+  parameters:
+    ExternalInstallationId:
+      name: externalInstallationId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+    RotationId:
+      name: rotationId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 200
+        pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+  responses:
+    Error:
+      description: Stable managed-platform error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    InstallationState:
+      type: string
+      enum: [provisioning, active, rotating, disabled, archived, error]
+    Capabilities:
+      type: object
+      required: [contractVersion, deploymentMode, protocols, surfaces, build]
+      properties:
+        contractVersion:
+          const: "1"
+        deploymentMode:
+          const: managed
+        protocols:
+          type: object
+          required: [inference, groupSelection, actorRouting, routingOwnerTakeover, actorStateLifecycle, credentialDelivery, keyRotation]
+          properties:
+            inference:
+              type: array
+              items:
+                enum: [openai-chat-completions, openai-responses, anthropic-messages, google-generate-content]
+            groupSelection:
+              const: true
+            actorRouting:
+              const: true
+            routingOwnerTakeover:
+              const: true
+            actorStateLifecycle:
+              const: true
+            credentialDelivery:
+              const: "1"
+            keyRotation:
+              const: prepare-commit-abort
+          additionalProperties: false
+        surfaces:
+          type: object
+          required: [listeners, readiness]
+          properties:
+            listeners:
+              const: split-v1
+            readiness:
+              const: "1"
+          additionalProperties: false
+        build:
+          type: object
+          additionalProperties: true
+      additionalProperties: false
+    GroupSummary:
+      type: object
+      required:
+        - id
+        - name
+        - isDefault
+        - enabledModelCount
+        - connectedProviderCount
+        - unavailableRouteCount
+        - deletionBlocked
+        - linkedApplications
+        - status
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        isDefault:
+          type: boolean
+        enabledModelCount:
+          type: integer
+          minimum: 0
+        connectedProviderCount:
+          type: integer
+          minimum: 0
+        unavailableRouteCount:
+          type: integer
+          minimum: 0
+        deletionBlocked:
+          type: boolean
+        linkedApplications:
+          type: array
+          items:
+            type: string
+        status:
+          enum: [empty, degraded, available]
+      additionalProperties: false
+    GroupList:
+      type: object
+      required: [contractVersion, items]
+      properties:
+        contractVersion:
+          const: "1"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupSummary"
+      additionalProperties: false
+    EnsureInstallationRequest:
+      type: object
+      required: [appId, displayName]
+      properties:
+        appId:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        appVersion:
+          type: string
+          minLength: 1
+          maxLength: 100
+        groupId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        routingOwner:
+          type: string
+          enum: [service, actor]
+          default: service
+        iconUrl:
+          type: string
+          maxLength: 2000
+          pattern: '^(https://|/api/market/image\?)'
+        adapterRevision:
+          type: string
+          minLength: 1
+          maxLength: 100
+      additionalProperties: false
+    SelectedGroup:
+      type: object
+      required:
+        - id
+        - name
+        - isDefault
+        - modelCount
+        - providerCount
+        - unavailableRouteCount
+      properties:
+        id:
+          type: string
+        name:
+          type: [string, "null"]
+        isDefault:
+          type: boolean
+        modelCount:
+          type: integer
+          minimum: 0
+        providerCount:
+          type: integer
+          minimum: 0
+        unavailableRouteCount:
+          type: integer
+          minimum: 0
+        historical:
+          type: boolean
+      additionalProperties: false
+    CredentialSummary:
+      type: object
+      required: [id, preview, lifecycle, generation, revoked]
+      properties:
+        id:
+          type: string
+        preview:
+          type: string
+        lifecycle:
+          enum: [active, pending, retired]
+        generation:
+          type: integer
+          minimum: 1
+        lastUsed:
+          type: [string, "null"]
+          format: date-time
+        requestCount:
+          type: integer
+          minimum: 0
+        revoked:
+          type: boolean
+        deliveryState:
+          enum: [not_applicable, pending_acknowledgement, acknowledged, expired]
+      additionalProperties: false
+    RoutingOwner:
+      type: object
+      required: [id, displayName, kind, state, externalIssuer, externalSubject]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        kind:
+          enum: [local, service, external]
+        state:
+          enum: [active, disabled]
+        externalIssuer:
+          type: [string, "null"]
+        externalSubject:
+          type: [string, "null"]
+      additionalProperties: false
+    Installation:
+      type: object
+      required:
+        - externalInstallationId
+        - app
+        - pointer
+        - routingOwner
+        - state
+        - selectedGroup
+        - credential
+        - pendingCredential
+        - lastReconciledAt
+        - drift
+        - archivedAt
+      properties:
+        externalInstallationId:
+          type: string
+        app:
+          type: object
+          required: [id, displayName, version, adapterRevision]
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+            version:
+              type: [string, "null"]
+            adapterRevision:
+              type: [string, "null"]
+          additionalProperties: false
+        pointer:
+          type: object
+          required: [installationId, instanceId]
+          properties:
+            installationId:
+              type: string
+            instanceId:
+              type: string
+          additionalProperties: false
+        routingOwner:
+          oneOf:
+            - $ref: "#/components/schemas/RoutingOwner"
+            - type: "null"
+        state:
+          $ref: "#/components/schemas/InstallationState"
+        selectedGroup:
+          oneOf:
+            - $ref: "#/components/schemas/SelectedGroup"
+            - type: "null"
+        credential:
+          oneOf:
+            - $ref: "#/components/schemas/CredentialSummary"
+            - type: "null"
+        pendingCredential:
+          oneOf:
+            - $ref: "#/components/schemas/CredentialSummary"
+            - type: "null"
+        lastReconciledAt:
+          type: [string, "null"]
+          format: date-time
+        drift:
+          type: object
+          required: [codes, healthy, unavailableRouteCount, recoveryActions]
+          properties:
+            codes:
+              type: array
+              items:
+                type: string
+            healthy:
+              type: boolean
+            unavailableRouteCount:
+              type: integer
+              minimum: 0
+            recoveryActions:
+              type: array
+              items:
+                enum: [rotate_credential, reconcile]
+          additionalProperties: false
+        archivedAt:
+          type: [string, "null"]
+          format: date-time
+      additionalProperties: false
+    ActorStateRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          enum: [active, disabled]
+      additionalProperties: false
+    ManagedActorStateRequest:
+      type: object
+      required: [actorSubject, state]
+      properties:
+        actorSubject:
+          type: string
+          minLength: 1
+          maxLength: 200
+        state:
+          enum: [active, disabled]
+      additionalProperties: false
+    ActorStateReceipt:
+      type: object
+      required: [actorUserId, state, affectedInstallations, attentionRequired]
+      properties:
+        actorUserId:
+          type: [string, "null"]
+        state:
+          enum: [active, disabled]
+        affectedInstallations:
+          type: integer
+          minimum: 0
+        attentionRequired:
+          type: boolean
+        absent:
+          type: boolean
+      additionalProperties: false
+    CredentialDelivery:
+      type: object
+      description: Ephemeral secret-bearing response. Never log or persist the credential.
+      required: [id, credential, expiresAt, acknowledgementRequired]
+      properties:
+        id:
+          type: string
+        credential:
+          type: string
+          pattern: "^ptr_[A-Za-z0-9_-]+$"
+          writeOnly: true
+        expiresAt:
+          type: string
+          format: date-time
+        acknowledgementRequired:
+          const: true
+      additionalProperties: false
+    InstallationWithDelivery:
+      type: object
+      required: [installation, credentialDelivery]
+      properties:
+        installation:
+          $ref: "#/components/schemas/Installation"
+        credentialDelivery:
+          oneOf:
+            - $ref: "#/components/schemas/CredentialDelivery"
+            - type: "null"
+      additionalProperties: false
+    InstallationList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Installation"
+        nextCursor:
+          type: [string, "null"]
+      additionalProperties: false
+    RotationPrepared:
+      type: object
+      required: [rotationId, installation, credentialDelivery]
+      properties:
+        rotationId:
+          type: string
+        installation:
+          $ref: "#/components/schemas/Installation"
+        credentialDelivery:
+          oneOf:
+            - $ref: "#/components/schemas/CredentialDelivery"
+            - type: "null"
+      additionalProperties: false
+    RotationFinished:
+      type: object
+      required: [rotationId, installation]
+      properties:
+        rotationId:
+          type: string
+        installation:
+          $ref: "#/components/schemas/Installation"
+      additionalProperties: false
+    ArchiveReceipt:
+      type: object
+      required:
+        - installationId
+        - externalInstallationId
+        - archived
+        - credentialsRevoked
+      properties:
+        installationId:
+          type: string
+        externalInstallationId:
+          type: string
+        archived:
+          const: true
+        credentialsRevoked:
+          const: true
+      additionalProperties: false
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [status, code, message, requestId, retryable]
+          properties:
+            status:
+              type: integer
+              minimum: 400
+              maximum: 599
+            code:
+              type: string
+            message:
+              type: string
+            requestId:
+              type: string
+            retryable:
+              type: boolean
+            details:
+              type: object
+              additionalProperties: true
+          additionalProperties: false
+      additionalProperties: false

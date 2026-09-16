@@ -1,0 +1,45 @@
+id: fireworks
+name: Fireworks AI
+type: openai-compatible
+baseUrl: https://api.fireworks.ai/inference/v1
+auth:
+  type: bearer
+  keyPrefix: "fw_"
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    url: https://api.fireworks.ai/v1/accounts/fireworks/models
+    query:
+      filter: supports_serverless=true
+    listPath: models
+    idField: name
+    nameField: displayName
+    contextField: contextLength
+    catalogIdentity:
+      field: huggingFaceUrl
+      stripPrefix: https://huggingface.co/
+      minimumSegments: 2
+    filters:
+      - path: state
+        equals: READY
+      - path: status.code
+        equals: OK
+      - path: kind
+        notEquals: EMBEDDING_MODEL
+    pagination:
+      cursorParam: pageToken
+      cursorPath: nextPageToken
+      pageSizeParam: pageSize
+      pageSize: 200

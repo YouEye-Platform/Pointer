@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/YouEye-Platform/Pointer/main/packages/contracts/specs/capabilities.v1.schema.json",
+  "title": "Pointer deployment capabilities v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "deploymentMode",
+    "localAuthAvailable",
+    "surface",
+    "managementContractVersion",
+    "inferenceContractVersion"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1"
+    },
+    "deploymentMode": {
+      "enum": [
+        "standalone",
+        "managed"
+      ]
+    },
+    "localAuthAvailable": {
+      "type": "boolean"
+    },
+    "surface": {
+      "enum": [
+        "combined",
+        "management",
+        "inference"
+      ]
+    },
+    "managementContractVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "inferenceContractVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

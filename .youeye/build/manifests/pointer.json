@@ -1,0 +1,22 @@
+{
+  "schema": "youeye.build.v2",
+  "component": "pointer",
+  "build_kind": "bun-standalone",
+  "entrypoint": ".youeye/build/pointer",
+  "working_directory": ".",
+  "inputs": [{"path": ".", "kind": "directory"}],
+  "submodules": [],
+  "executor": {"id": "koshka-lxc-625-v1", "digest": "92f4846683a50b2547e0bbf7c368ae1f34a1ed7388e6ebd6dfedc4770f8909cc"},
+  "build_kit": {"id": "youeye-permanent-build-kit-v1", "digest": "ed478630fc45ad7a6fa6946d142962a71d32bbd7dfc9c7d6dcf77f4da48e3d11"},
+  "public_inputs": {},
+  "public_input_schema": {"version": "version", "branch": "branch", "source_commit": "commit", "lane": "lane"},
+  "environment": {"locale": "C.UTF-8", "timezone": "UTC", "source_date_epoch": 0, "variables": {"CI": "1"}},
+  "network": {"mode": "deny", "external_inputs": []},
+  "unsigned_outputs": [{"name": "standalone.tar", "role": "pointer-server", "media_type": "application/x-tar", "minimum_size_bytes": 50000000, "structural_checks": ["safe-uncompressed-tar", "root-bun-runtime", "root-server-js", "package-version", "pointer-migrations", "pointer-provider-manifests", "http-startup"]}],
+  "reproducibility": {"class": "normalized", "comparator": "sha256-set-v1", "exceptions": []},
+  "validation_profile": "bun-standalone-v1",
+  "sbom_profile": "spdx-2.3-v1",
+  "provenance_profile": "slsa-provenance-v1",
+  "publication_lane": "development",
+  "privilege_class": "unprivileged"
+}

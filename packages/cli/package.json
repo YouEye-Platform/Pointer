@@ -1,0 +1,21 @@
+{
+  "name": "@pointer/cli",
+  "version": "0.2.0",
+  "private": true,
+  "bin": {
+    "pointer": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "5.9.3"
+  }
+}

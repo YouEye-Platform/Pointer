@@ -1,0 +1,25 @@
+id: xai
+name: xAI
+type: openai-compatible
+baseUrl: https://api.x.ai/v1
+auth:
+  type: bearer
+  keyPrefix: "xai-"
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /language-models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: models
+    idField: id
+    nameField: id

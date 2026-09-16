@@ -1,0 +1,26 @@
+id: groq
+name: Groq
+type: openai-compatible
+baseUrl: https://api.groq.com/openai/v1
+auth:
+  type: bearer
+  keyPrefix: "gsk_"
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: id
+    contextField: context_window

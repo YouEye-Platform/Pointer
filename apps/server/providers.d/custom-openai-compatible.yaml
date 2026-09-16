@@ -1,0 +1,29 @@
+id: custom-openai-compatible
+name: Custom OpenAI-compatible Endpoint
+type: openai-compatible
+baseUrl: https://example.invalid/v1
+endpoint:
+  mode: required
+  label: OpenAI-compatible API endpoint
+  placeholder: https://ai.example.com/v1
+auth:
+  type: bearer
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /models
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: name
+    contextField: context_window

@@ -1,0 +1,19 @@
+{
+  "name": "@pointer/contracts",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./capabilities": "./src/capabilities.ts",
+    "./platform-api-v1": "./src/generated/platform-api-v1.ts"
+  },
+  "scripts": {
+    "generate": "openapi-typescript specs/platform-api.v1.openapi.yaml -o src/generated/platform-api-v1.ts",
+    "check": "openapi-typescript specs/platform-api.v1.openapi.yaml -o src/generated/platform-api-v1.ts --check && node scripts/check-capabilities.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.9.1",
+    "typescript": "5.9.3"
+  }
+}

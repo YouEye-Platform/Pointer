@@ -1,0 +1,24 @@
+id: openai-codex
+name: OpenAI (Codex)
+type: openai-compatible
+baseUrl: https://chatgpt.com/backend-api/codex
+auth:
+  type: oauth-device-flow
+  clientId: app_EMoamEEZ73f0CkXaXp7hrann
+  issuer: https://auth.openai.com
+  scopes: openid profile email offline_access
+
+endpoints:
+  responses: /responses
+
+gateway:
+  operations:
+    generate:
+      format: responses
+      endpoint: /responses
+
+handler: codex
+
+models:
+  discovery:
+    enabled: true

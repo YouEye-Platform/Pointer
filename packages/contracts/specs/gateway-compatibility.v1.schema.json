@@ -1,0 +1,490 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/YouEye-Platform/Pointer/main/packages/contracts/specs/gateway-compatibility.v1.schema.json",
+  "title": "Pointer Gateway Compatibility V1",
+  "description": "Wire-safe V1 gateway compatibility result, warnings and normalized diagnostics. This schema enforces shape and locally expressible invariants; Pointer's executable validator additionally enforces requested-feature/finding equality, unique finding paths, and exact warning correspondence.",
+  "oneOf": [
+    { "$ref": "#/$defs/compatibilityResult" },
+    { "$ref": "#/$defs/warningEnvelope" },
+    { "$ref": "#/$defs/safeDiagnostic" }
+  ],
+  "$defs": {
+    "wireFormat": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "version"],
+          "properties": {
+            "format": { "const": "chat-completions" },
+            "version": { "const": "v1" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "version"],
+          "properties": {
+            "format": { "const": "messages" },
+            "version": { "const": "2023-06-01" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "version"],
+          "properties": {
+            "format": { "const": "responses" },
+            "version": { "const": "v1" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "version"],
+          "properties": {
+            "format": { "const": "google-generate-content" },
+            "version": { "const": "v1beta" }
+          }
+        }
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": ["native", "emulated", "lossy", "unsupported", "unknown"]
+    },
+    "safeMessage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "allOf": [
+        { "not": { "pattern": "[\\u0000-\\u001f\\u007f]" } },
+        { "not": { "pattern": "\\b(?:[Bb][Ee][Aa][Rr][Ee][Rr]|[Bb][Aa][Ss][Ii][Cc])\\s+\\S+" } },
+        { "not": { "pattern": "\\b(?:[Ss][Kk]-|[Pp][Tt][Rr]_|[Pp][Tt][Rr][Rr][Ee][Qq]_|[Gg][Hh][Pp]_|[Gg][Ii][Tt][Hh][Uu][Bb]_[Pp][Aa][Tt]_|[Xx][Oo][Xx][BbAaPpRrSs]-|[Aa][Ii][Zz][Aa])[A-Za-z0-9._-]+" } },
+        { "not": { "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b" } },
+        { "not": { "pattern": "[Hh][Tt][Tt][Pp][Ss]?://" } },
+        { "not": { "pattern": "(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Xx]-[Aa][Pp][Ii]-[Kk][Ee][Yy]|[Aa][Pp][Ii]-?[Kk][Ee][Yy]|[Aa][Pp][Ii]_?[Kk][Ee][Yy]|[Aa][Pp][Ii][Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss]_?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh]_?[Tt][Oo][Kk][Ee][Nn]|[Cc][Ll][Ii][Ee][Nn][Tt]_?[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt])\\s*[=:]" } },
+        { "not": { "pattern": "[?&](?:[Aa][Cc][Cc][Ee][Ss][Ss]_[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh]_[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii]_[Kk][Ee][Yy]|[Aa][Pp][Ii][Kk][Ee][Yy]|[Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Cc][Ll][Ii][Ee][Nn][Tt]_[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd])=" } },
+        { "not": { "pattern": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b" } }
+      ]
+    },
+    "featureId": {
+      "type": "string",
+      "enum": [
+        "operation", "streaming", "usage-in-stream", "ordered-multimodal-content",
+        "text-input", "image-input", "file-input", "text-output", "image-output",
+        "audio-output", "system-instructions", "developer-instructions", "tool-definitions",
+        "tool-choice", "tool-calls", "tool-results", "parallel-tool-calls",
+        "structured-output", "json-schema", "audio-input", "reasoning-controls",
+        "reasoning-results", "stop-controls", "finish-reasons", "token-usage",
+        "prompt-caching", "logprobs", "seed", "service-tier", "metadata",
+        "provider-extensions"
+      ]
+    },
+    "findingMessage": {
+      "type": "string",
+      "enum": [
+        "The requested feature is supported natively.",
+        "Pointer emulates the requested feature without semantic loss.",
+        "Pointer may degrade the requested feature.",
+        "The selected deployment does not support the requested feature.",
+        "Support for the requested feature is unknown."
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature", "path", "state", "code", "message", "bestEffortAllowed"],
+      "properties": {
+        "feature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "$ref": "#/$defs/featureId" },
+            "version": { "const": "1" }
+          }
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+        },
+        "state": { "$ref": "#/$defs/state" },
+        "code": {
+          "type": "string",
+          "enum": [
+            "pointer_feature_native", "pointer_feature_emulated", "pointer_feature_lossy",
+            "pointer_feature_unsupported", "pointer_feature_unknown"
+          ]
+        },
+        "message": { "$ref": "#/$defs/findingMessage" },
+        "bestEffortAllowed": { "type": "boolean" }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "native" } } }, "then": { "properties": { "code": { "const": "pointer_feature_native" }, "message": { "const": "The requested feature is supported natively." } } } },
+        { "if": { "properties": { "state": { "const": "emulated" } } }, "then": { "properties": { "code": { "const": "pointer_feature_emulated" }, "message": { "const": "Pointer emulates the requested feature without semantic loss." } } } },
+        { "if": { "properties": { "state": { "const": "lossy" } } }, "then": { "properties": { "code": { "const": "pointer_feature_lossy" }, "message": { "const": "Pointer may degrade the requested feature." } } } },
+        { "if": { "properties": { "state": { "const": "unsupported" } } }, "then": { "properties": { "code": { "const": "pointer_feature_unsupported" }, "message": { "const": "The selected deployment does not support the requested feature." } } } },
+        { "if": { "properties": { "state": { "const": "unknown" } } }, "then": { "properties": { "code": { "const": "pointer_feature_unknown" }, "message": { "const": "Support for the requested feature is unknown." } } } }
+      ]
+    },
+    "requestedFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature", "path"],
+      "properties": {
+        "feature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "$ref": "#/$defs/featureId" },
+            "version": { "const": "1" }
+          }
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+        }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature", "path", "state", "code", "message"],
+      "properties": {
+        "feature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version"],
+          "properties": {
+            "id": { "$ref": "#/$defs/featureId" },
+            "version": { "const": "1" }
+          }
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*$"
+        },
+        "state": { "enum": ["lossy", "unknown"] },
+        "code": { "enum": ["pointer_feature_lossy", "pointer_feature_unknown"] },
+        "message": { "$ref": "#/$defs/findingMessage" }
+      },
+      "allOf": [
+        { "if": { "properties": { "state": { "const": "lossy" } } }, "then": { "properties": { "code": { "const": "pointer_feature_lossy" }, "message": { "const": "Pointer may degrade the requested feature." } } } },
+        { "if": { "properties": { "state": { "const": "unknown" } } }, "then": { "properties": { "code": { "const": "pointer_feature_unknown" }, "message": { "const": "Support for the requested feature is unknown." } } } }
+      ]
+    },
+    "compatibilityResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "sourceFormat", "targetFormat", "result", "accepted", "policy", "requestedFeatures", "findings", "warnings"],
+      "properties": {
+        "contractVersion": { "const": "gateway-compatibility.v1" },
+        "sourceFormat": { "$ref": "#/$defs/wireFormat" },
+        "targetFormat": { "$ref": "#/$defs/wireFormat" },
+        "result": { "$ref": "#/$defs/state" },
+        "accepted": { "type": "boolean" },
+        "policy": { "enum": ["strict", "best-effort"] },
+        "requestedFeatures": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/requestedFeature" },
+          "contains": {
+            "type": "object",
+            "required": ["feature"],
+            "properties": {
+              "feature": {
+                "type": "object",
+                "required": ["id"],
+                "properties": { "id": { "const": "operation" } }
+              }
+            }
+          },
+          "minContains": 1
+        },
+        "findings": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/finding" },
+          "contains": {
+            "type": "object",
+            "required": ["feature"],
+            "properties": {
+              "feature": {
+                "type": "object",
+                "required": ["id"],
+                "properties": { "id": { "const": "operation" } }
+              }
+            }
+          },
+          "minContains": 1
+        },
+        "warnings": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/warning" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "result": { "const": "native" } } },
+          "then": { "properties": { "findings": { "type": "array", "items": { "type": "object", "properties": { "state": { "const": "native" } } } } } }
+        },
+        {
+          "if": { "properties": { "result": { "const": "emulated" } } },
+          "then": {
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": { "type": "object", "properties": { "state": { "enum": ["native", "emulated"] } } },
+                "contains": { "type": "object", "properties": { "state": { "const": "emulated" } } },
+                "minContains": 1
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "result": { "const": "unknown" } } },
+          "then": {
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": { "type": "object", "properties": { "state": { "enum": ["native", "emulated", "unknown"] } } },
+                "contains": { "type": "object", "properties": { "state": { "const": "unknown" } } },
+                "minContains": 1
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "result": { "const": "lossy" } } },
+          "then": {
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": { "type": "object", "properties": { "state": { "enum": ["native", "emulated", "unknown", "lossy"] } } },
+                "contains": { "type": "object", "properties": { "state": { "const": "lossy" } } },
+                "minContains": 1
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "result": { "const": "unsupported" } } },
+          "then": {
+            "properties": {
+              "findings": {
+                "type": "array",
+                "contains": { "type": "object", "properties": { "state": { "const": "unsupported" } } },
+                "minContains": 1
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "accepted": { "const": true } } },
+          "then": {
+            "properties": {
+              "findings": { "type": "array", "items": { "type": "object", "properties": { "state": { "not": { "const": "unsupported" } } } } }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "accepted": { "const": true }, "policy": { "const": "strict" } },
+            "required": ["accepted", "policy"]
+          },
+          "then": {
+            "properties": {
+              "findings": { "type": "array", "items": { "type": "object", "properties": { "state": { "enum": ["native", "emulated"] } } } }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "accepted": { "const": true }, "policy": { "const": "best-effort" } },
+            "required": ["accepted", "policy"]
+          },
+          "then": {
+            "properties": {
+              "findings": {
+                "type": "array",
+                "items": {
+                  "not": {
+                    "type": "object",
+                    "properties": {
+                      "state": { "enum": ["lossy", "unknown"] },
+                      "bestEffortAllowed": { "const": false }
+                    },
+                    "required": ["state", "bestEffortAllowed"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "accepted": { "const": false } } },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "findings": {
+                    "type": "array",
+                    "contains": { "type": "object", "properties": { "state": { "const": "unsupported" } } },
+                    "minContains": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "policy": { "const": "strict" },
+                  "findings": {
+                    "type": "array",
+                    "contains": { "type": "object", "properties": { "state": { "enum": ["lossy", "unknown"] } } },
+                    "minContains": 1
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "policy": { "const": "best-effort" },
+                  "findings": {
+                    "type": "array",
+                    "contains": {
+                      "type": "object",
+                      "properties": {
+                        "state": { "enum": ["lossy", "unknown"] },
+                        "bestEffortAllowed": { "const": false }
+                      },
+                      "required": ["state", "bestEffortAllowed"]
+                    },
+                    "minContains": 1
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "warningEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "warnings"],
+      "properties": {
+        "contractVersion": { "const": "gateway-compatibility.v1" },
+        "warnings": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/warning" } }
+      }
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": [
+        "pointer_invalid_request", "pointer_feature_lossy", "pointer_feature_unsupported",
+        "pointer_feature_unknown", "pointer_no_compatible_target", "pointer_upstream_auth",
+        "pointer_upstream_rate_limit", "pointer_upstream_timeout", "pointer_upstream_unavailable", "pointer_context_length_exceeded", "pointer_empty_response",
+        "pointer_connect_timeout", "pointer_first_token_timeout", "pointer_idle_timeout",
+        "pointer_total_timeout", "pointer_client_cancelled", "pointer_malformed_stream",
+        "pointer_upstream_disconnected", "pointer_stream_interrupted", "pointer_internal_error"
+      ]
+    },
+    "safeDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "diagnosticVersion", "requestId", "errorClass", "metadataSource", "upstreamStatus", "upstreamCode",
+        "upstreamRequestId", "retryAfterMs", "rateLimitRemaining", "rateLimitResetAt",
+        "message", "retryable"
+      ],
+      "properties": {
+        "diagnosticVersion": { "const": "1" },
+        "requestId": { "type": "string", "pattern": "^ptrreq_[A-Za-z0-9_-]{8,120}$" },
+        "errorClass": { "enum": ["http", "network", "timeout", "protocol", "translation"] },
+        "metadataSource": { "enum": ["none", "adapter-allowlist"] },
+        "upstreamStatus": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+        "upstreamCode": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "allOf": [
+                { "not": { "pattern": "\\b(?:[Ss][Kk]-|[Pp][Tt][Rr]_|[Pp][Tt][Rr][Rr][Ee][Qq]_|[Gg][Hh][Pp]_|[Gg][Ii][Tt][Hh][Uu][Bb]_[Pp][Aa][Tt]_|[Xx][Oo][Xx][BbAaPpRrSs]-|[Aa][Ii][Zz][Aa])" } },
+                { "not": { "pattern": "(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Xx]-[Aa][Pp][Ii]-[Kk][Ee][Yy]|[Aa][Pp][Ii]-?[Kk][Ee][Yy]|[Aa][Pp][Ii]_?[Kk][Ee][Yy]|[Aa][Pp][Ii][Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss]_?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh]_?[Tt][Oo][Kk][Ee][Nn]|[Cc][Ll][Ii][Ee][Nn][Tt]_?[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt])\\s*[=:]" } },
+                { "not": { "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}" } }
+              ]
+            }
+          ]
+        },
+        "upstreamRequestId": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "allOf": [
+                { "not": { "pattern": "\\b(?:[Ss][Kk]-|[Pp][Tt][Rr]_|[Pp][Tt][Rr][Rr][Ee][Qq]_|[Gg][Hh][Pp]_|[Gg][Ii][Tt][Hh][Uu][Bb]_[Pp][Aa][Tt]_|[Xx][Oo][Xx][BbAaPpRrSs]-|[Aa][Ii][Zz][Aa])" } },
+                { "not": { "pattern": "(?:[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Pp][Rr][Oo][Xx][Yy]-[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Ss][Ee][Tt]-[Cc][Oo][Oo][Kk][Ii][Ee]|[Xx]-[Aa][Pp][Ii]-[Kk][Ee][Yy]|[Aa][Pp][Ii]-?[Kk][Ee][Yy]|[Aa][Pp][Ii]_?[Kk][Ee][Yy]|[Aa][Pp][Ii][Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss]_?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh]_?[Tt][Oo][Kk][Ee][Nn]|[Cc][Ll][Ii][Ee][Nn][Tt]_?[Ss][Ee][Cc][Rr][Ee][Tt]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt])\\s*[=:]" } },
+                { "not": { "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}" } }
+              ]
+            }
+          ]
+        },
+        "retryAfterMs": { "type": ["integer", "null"], "minimum": 0, "maximum": 86400000 },
+        "rateLimitRemaining": { "type": ["integer", "null"], "minimum": 0, "maximum": 1000000000 },
+        "rateLimitResetAt": { "type": ["string", "null"], "format": "date-time" },
+        "message": {
+          "enum": [
+            "Upstream HTTP request failed", "Upstream network request failed",
+            "Upstream request timed out", "Upstream protocol error",
+            "Upstream response translation failed"
+          ]
+        },
+        "retryable": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "metadataSource": { "const": "none" } } },
+          "then": {
+            "properties": {
+              "upstreamCode": { "const": null },
+              "upstreamRequestId": { "const": null },
+              "retryAfterMs": { "const": null },
+              "rateLimitRemaining": { "const": null },
+              "rateLimitResetAt": { "const": null }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "errorClass": { "const": "http" } } },
+          "then": { "properties": { "message": { "const": "Upstream HTTP request failed" } } }
+        },
+        {
+          "if": { "properties": { "errorClass": { "const": "network" } } },
+          "then": { "properties": { "message": { "const": "Upstream network request failed" } } }
+        },
+        {
+          "if": { "properties": { "errorClass": { "const": "timeout" } } },
+          "then": { "properties": { "message": { "const": "Upstream request timed out" } } }
+        },
+        {
+          "if": { "properties": { "errorClass": { "const": "protocol" } } },
+          "then": { "properties": { "message": { "const": "Upstream protocol error" } } }
+        },
+        {
+          "if": { "properties": { "errorClass": { "const": "translation" } } },
+          "then": { "properties": { "message": { "const": "Upstream response translation failed" } } }
+        }
+      ]
+    }
+  }
+}

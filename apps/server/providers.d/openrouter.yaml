@@ -1,0 +1,41 @@
+id: openrouter
+name: OpenRouter
+type: openai-compatible
+baseUrl: https://openrouter.ai/api/v1
+auth:
+  type: bearer
+  keyPrefix: "sk-or-"
+
+endpoints:
+  chatCompletions: /chat/completions
+  responses: /responses
+  models: /models/user
+
+gateway:
+  operations:
+    generate:
+      format: chat-completions
+      endpoint: /chat/completions
+
+balance:
+  url: https://openrouter.ai/api/v1/credits
+  parser:
+    path: "data.total_credits"
+    subtractPath: "data.total_usage"
+    currency: USD
+  pollInterval: 3600
+
+models:
+  discovery:
+    enabled: true
+    listPath: data
+    idField: id
+    nameField: name
+    pricingPath: pricing
+    inputPriceField: prompt
+    outputPriceField: completion
+    contextField: context_length
+
+headers:
+  HTTP-Referer: https://pointer.byka.wtf
+  X-Title: Pointer
