@@ -1,6 +1,6 @@
 {
   "name": "@pointer/server",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "scripts": {
     "dev": "bun run --hot src/index.ts",
@@ -10,7 +10,8 @@
     "test": "DATABASE_URL=\"${DATABASE_URL:-postgresql:///pointer_unit_test}\" JWT_SECRET=\"${JWT_SECRET:-test-secret-do-not-use-in-prod}\" ENCRYPTION_SECRET=\"${ENCRYPTION_SECRET:-test-encryption-secret-do-not-use-in-prod}\" CORS_ORIGIN=\"${CORS_ORIGIN:-http://localhost:3000}\" bun test --max-concurrency=1",
     "test:catalog-postgres": "CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-reconciliation.postgres.test.ts src/services/benchmark-credentials.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/routes/model-groups.postgres.test.ts src/routes/providers.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-termination.postgres.test.ts && CATALOG_POSTGRES_TEST=1 bun test src/services/catalog-sync.postgres.test.ts",
     "test:managed-postgres": "MANAGED_POSTGRES_TEST=1 bun test src/services/managed-platform.postgres.test.ts --max-concurrency=1",
-    "test:postgres": "pnpm test:catalog-postgres && pnpm test:managed-postgres",
+    "test:identity-postgres": "IDENTITY_TRANSITION_POSTGRES_TEST=1 bun test src/services/managed-identity-transition.postgres.test.ts",
+    "test:postgres": "pnpm test:catalog-postgres && pnpm test:managed-postgres && pnpm test:identity-postgres",
     "test:alias-e2e": "bun run scripts/alias-e2e.ts",
     "catalog:analyze": "bun run scripts/catalog-health.ts",
     "catalog:export": "bun run scripts/export-catalog-corpus.ts",

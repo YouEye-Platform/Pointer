@@ -38,6 +38,7 @@ fi
 
 export CATALOG_POSTGRES_TEST_DATABASE="${CATALOG_POSTGRES_TEST_DATABASE:-${database_name}}"
 export MANAGED_POSTGRES_TEST_DATABASE="${MANAGED_POSTGRES_TEST_DATABASE:-${database_name}}"
+export IDENTITY_TRANSITION_TEST_DATABASE="${IDENTITY_TRANSITION_TEST_DATABASE:-${database_name}}"
 export JWT_SECRET="${JWT_SECRET:-postgres-test-jwt-secret}"
 export ENCRYPTION_SECRET="${ENCRYPTION_SECRET:-postgres-test-encryption-secret}"
 export CORS_ORIGIN="${CORS_ORIGIN:-http://127.0.0.1:3200}"

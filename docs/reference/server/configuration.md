@@ -46,6 +46,24 @@ startup. Later configuration drift fails closed instead of silently rebinding
 an existing database. Local JWT and encryption secrets remain required because
 the same artifact supports standalone rollback and existing encrypted data.
 
+An authorized host rename uses the packaged `transition-managed-identity.js`
+command before restarting with the new issuer. This is a local database-owner
+operation, not an HTTP endpoint or automatic startup override. The host passes
+`DATABASE_URL` and `POINTER_IDENTITY_TRANSITION` through its protected execution
+environment. The latter contains `integrationId`, `oldIssuer`, `newIssuer`,
+`audience`, and `subject`. Invoke with `--expect-database pointer --check` to
+validate without changing trust, then omit `--check` to apply. Both require the
+exact active integration, active service owner, unchanged audience/subject and
+HTTPS issuers. The connected role must own the named database.
+
+The transition serializes with managed startup, retains ownership and application
+data, and atomically records an audit receipt with the issuer change. Repeating
+the same completed transition is safe; a matching audit receipt is required.
+An exact reverse transition supports host rollback. The host must coordinate
+its routing/configuration change and Pointer restart, and restore the previous
+settings if the new service cannot become ready. Changing environment variables
+alone continues to fail closed.
+
 ## Gateway contract
 
 The gateway engine is fixed to V1. There is no engine-selection or dual-run environment variable.

@@ -50,6 +50,7 @@ pnpm typecheck
 pnpm contracts:check
 bun build apps/server/src/index.ts --target=bun --outfile="$stage/server.js"
 bun build apps/server/scripts/migrate.ts --target=bun --outfile="$stage/migrate.js"
+bun build apps/server/scripts/transition-managed-identity.ts --target=bun --outfile="$stage/transition-managed-identity.js"
 cp "$(command -v bun)" "$stage/bun"
 chmod 0755 "$stage/bun"
 cp apps/server/package.json "$stage/package.json"
@@ -64,6 +65,6 @@ rm -f -- "$temporary" "$output"
 tar --sort=name --format=posix --numeric-owner --owner=0 --group=0 \
   --mtime="@$source_epoch" --pax-option=delete=atime,delete=ctime \
   -C "$stage" -cf "$temporary" .
-tar -tf "$temporary" ./bun ./server.js ./migrate.js ./release-manifest.json >/dev/null
+tar -tf "$temporary" ./bun ./server.js ./migrate.js ./transition-managed-identity.js ./release-manifest.json >/dev/null
 mv -- "$temporary" "$output"
 sha256sum "$output"
