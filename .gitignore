@@ -16,3 +16,7 @@ coverage/
 *.dump
 *.dump.sha256
 *.tgz
+/data/
+/apps/server/data/
+
+apps/web/public/pointer-ui/

@@ -609,3 +609,18 @@ describe("catalog reconciliation core", () => {
     expect(plan.map((candidate) => candidate.id)).toEqual(["old-retired"]);
   });
 });
+
+test("unidentified engine models retain separate exact routes without inventing a shared identity", () => {
+  const engineSnapshots = ["one", "two"].map(id => ({ ...snapshots[1], id: `snap-engine-${id}`, sourceId: `provider:${id}` }));
+  const observations: ReconciliationObservation[] = engineSnapshots.map((snapshot, index) => ({
+    id: `obs-engine-${index}`, snapshotId: snapshot.id, sourceId: snapshot.sourceId,
+    kind: "provider_model", nativeId: "space-bunny", rawName: "space-bunny", organizationHint: null,
+    payload: { ...providerPayload, id: `pm-${index}`, providerId: `ep-${index}`, providerName: `Provider ${index}`,
+      rawModelId: "space-bunny", existingModelId: `provider-${index}/space-bunny`, displayName: "space-bunny", engineInventory: true },
+  }));
+  const plan = buildCatalogGenerationPlan({ snapshots: engineSnapshots, observations });
+  expect(plan.entities.map(row => row.id)).toEqual(["route/pm-0", "route/pm-1"]);
+  expect(plan.entities.every(row => row.organizationId === null)).toBe(true);
+  expect(plan.routes).toHaveLength(2);
+  expect(plan.decisions.every(row => row.evidence.includes("exact-provider-route-only;canonical-identity-unresolved"))).toBe(true);
+});

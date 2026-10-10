@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { streamChat } from "@/lib/api";
+import { pointerFetch, streamChat } from "@/lib/api";
+import { pointerStorage } from "@/lib/host-runtime";
 
 const PROXY_KEY_STORAGE = "pointer_proxy_key";
 
@@ -22,9 +23,10 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
+  const sessionId = useRef(crypto.randomUUID());
 
   useEffect(() => {
-    const saved = localStorage.getItem(PROXY_KEY_STORAGE);
+    const saved = pointerStorage.getItem(PROXY_KEY_STORAGE);
     if (saved) {
       setApiKey(saved);
       setKeySaved(true);
@@ -48,13 +50,13 @@ export default function ChatPage() {
 
   function saveKey() {
     if (!apiKey.trim()) return;
-    localStorage.setItem(PROXY_KEY_STORAGE, apiKey.trim());
+    pointerStorage.setItem(PROXY_KEY_STORAGE, apiKey.trim());
     setKeySaved(true);
     loadModels(apiKey.trim());
   }
 
   function clearKey() {
-    localStorage.removeItem(PROXY_KEY_STORAGE);
+    pointerStorage.removeItem(PROXY_KEY_STORAGE);
     setKeySaved(false);
     setModels([]);
     setModel("");
@@ -91,7 +93,8 @@ export default function ChatPage() {
           setStreaming(false);
           setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant bubble
         },
-      }
+      },
+      sessionId.current
     );
   }
 
@@ -173,11 +176,8 @@ export default function ChatPage() {
 
 // GET /v1/models with a ptr_ key (bypasses the JWT api helper).
 async function api_v1_models(key: string): Promise<{ id: string }[]> {
-  const res = await fetch(`${apiBase()}/v1/models`, { headers: { Authorization: `Bearer ${key}` } });
+  const res = await pointerFetch("/v1/models", { headers: { Authorization: `Bearer ${key}` } });
   if (!res.ok) throw new Error(`${res.status}`);
   const json = await res.json();
   return json.data || [];
-}
-function apiBase(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 }

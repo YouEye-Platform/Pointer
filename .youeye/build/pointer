@@ -26,7 +26,7 @@ require bun
 require tar
 [[ $(node --version) == v22.23.2 ]] || fail 'Node 22.23.2 is required'
 [[ $(pnpm --version) == 10.6.2 ]] || fail 'pnpm 10.6.2 is required'
-[[ $(bun --version) == 1.3.* ]] || fail 'Bun 1.3.x is required'
+[[ $(bun --version) == 1.4.2 ]] || fail 'Bun 1.4.2 is required'
 [[ -n ${YOUEYE_PNPM_STORE_DIR:-} && -d $YOUEYE_PNPM_STORE_DIR ]] || fail 'reviewed pnpm store is required'
 
 export LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC YOUEYE_SOURCE_BRANCH YOUEYE_SOURCE_REPOSITORY
@@ -48,12 +48,39 @@ pnpm install --frozen-lockfile --offline --package-import-method=copy --store-di
 pnpm public-source:check
 pnpm typecheck
 pnpm contracts:check
-bun build apps/server/src/index.ts --target=bun --outfile="$stage/server.js"
+pnpm test:unit
+bun build apps/server/src/index.ts --target=bun --external=@pointer/engine --outfile="$stage/server.js"
 bun build apps/server/scripts/migrate.ts --target=bun --outfile="$stage/migrate.js"
 bun build apps/server/scripts/transition-managed-identity.ts --target=bun --outfile="$stage/transition-managed-identity.js"
+bun build apps/server/scripts/import-provider-state.ts --target=bun --external=@pointer/engine --outfile="$stage/import-provider-state.js"
+pnpm --filter @pointer/web build:embed
+cp -a apps/web/public/pointer-ui "$stage/ui"
+npm_config_package_import_method=copy pnpm --offline --store-dir "$YOUEYE_PNPM_STORE_DIR" --filter @pointer/engine deploy --prod --legacy "$stage/engine"
+# Legacy deploy retains development workspace aliases in its virtual store.
+# Engine has no @pointer production dependencies; remove only those aliases.
+node --input-type=module - "$stage/engine" <<'ENGINE_WORKSPACE_ALIASES'
+import {lstatSync, readlinkSync, rmSync} from 'node:fs';
+import {resolve, relative, isAbsolute} from 'node:path';
+const root = resolve(process.argv[2]);
+for (const name of ['server', 'web', 'cli', 'contracts', 'engine']) {
+  const file = resolve(root, 'node_modules/.pnpm/node_modules/@pointer', name);
+  let stat; try { stat = lstatSync(file); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+  if (!stat.isSymbolicLink()) throw new Error('Unexpected workspace alias type: @pointer/' + name);
+  const target = resolve(file, '..', readlinkSync(file));
+  const rel = relative(root, target);
+  if (rel === '..' || rel.startsWith('../') || isAbsolute(rel)) {
+    rmSync(file);
+    console.log('Removed development workspace alias @pointer/' + name);
+  }
+}
+ENGINE_WORKSPACE_ALIASES
+install -d -m 0755 "$stage/node_modules/@pointer"
+ln -s ../../engine "$stage/node_modules/@pointer/engine"
 cp "$(command -v bun)" "$stage/bun"
 chmod 0755 "$stage/bun"
 cp apps/server/package.json "$stage/package.json"
+cp LICENSE NOTICE.md "$stage/"
+cp -a third-party "$stage/third-party"
 cp -a apps/server/drizzle "$stage/drizzle"
 cp -a apps/server/providers.d "$stage/providers.d"
 find "$stage/providers.d" -type f -name '*.test.ts' -delete
@@ -65,6 +92,6 @@ rm -f -- "$temporary" "$output"
 tar --sort=name --format=posix --numeric-owner --owner=0 --group=0 \
   --mtime="@$source_epoch" --pax-option=delete=atime,delete=ctime \
   -C "$stage" -cf "$temporary" .
-tar -tf "$temporary" ./bun ./server.js ./migrate.js ./transition-managed-identity.js ./release-manifest.json >/dev/null
+tar -tf "$temporary" ./bun ./server.js ./migrate.js ./transition-managed-identity.js ./import-provider-state.js ./ui/manifest.json ./release-manifest.json >/dev/null
 mv -- "$temporary" "$output"
 sha256sum "$output"

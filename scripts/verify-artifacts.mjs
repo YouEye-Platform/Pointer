@@ -54,6 +54,9 @@ for (const archive of archives) {
     command("tar", ["-tzf", path], {
       stdio: ["ignore", "pipe", "inherit"],
       encoding: "utf8",
+      // The engine ships runtime assets and a larger dependency tree. Node's
+      // default 1 MiB stdout limit is smaller than the archive's path listing.
+      maxBuffer: 16 * 1024 * 1024,
     }) ?? ""
   );
   if (!listing.includes("release-manifest.json")) {

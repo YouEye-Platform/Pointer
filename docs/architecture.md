@@ -66,3 +66,6 @@ Both artifacts are built from the same clean commit. Each contains
 `release-manifest.json`, a non-secret `release.env`, and an external SHA-256
 sidecar. Health/version responses expose component, version, repository,
 branch, commit and build time so mixed releases can be detected.
+
+Endpoint wire profiles and reversible semantic tools are documented in
+[gateway capabilities](gateway-capabilities.md).

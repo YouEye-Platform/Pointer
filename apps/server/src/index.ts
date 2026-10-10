@@ -4,6 +4,7 @@ import {
   createStandaloneApp,
 } from "./app";
 import { config } from "./config";
+import { enginePool } from "./services/engine";
 import { registry } from "./providers/registry";
 import { refreshSupportedAccounts, refreshSupportedBalances } from "./services/provider-operations";
 import { scheduleCanonicalCatalogSync } from "./services/catalog-sync";
@@ -13,13 +14,48 @@ import { pruneCatalog } from "./services/catalog-retention";
 import { syncModelCatalog } from "./services/model-sync";
 import { sourceSync } from "./services/source-sync";
 import { operationalSettings, pruneExpiredUsage } from "./services/system-settings";
-import { drainUsageWrites } from "./services/usage-telemetry";
+import { startUsageReceiptReplay, drainUsageWrites } from "./services/usage-telemetry";
 import { createBunFetchHandler } from "./http-runtime";
 import { sourceRefreshDelayMs } from "./services/source-refresh-schedule";
 
 async function startup() {
   await registry.initialize();
   await ensureManagedIntegration();
+
+  const refreshSources = async (): Promise<boolean> => {
+    try {
+      const results = await sourceSync.refreshAll();
+      let failed = false;
+      for (const { sourceId, result } of results) {
+        if (result.status === "rejected") {
+          failed = true;
+          console.error(`[sources] ${sourceId} sync failed`);
+        }
+      }
+      if (results.some(({ result }) => result.status === "fulfilled" && result.value !== null)) {
+        await scheduleCanonicalCatalogSync();
+      }
+      return !failed;
+    } catch {
+      console.error("[catalog] Canonical sync failed");
+      return false;
+    }
+  };
+
+  // Catalog evidence can refresh without invoking Pointer's former provider
+  // handlers. Provider authentication, discovery and health belong to the engine.
+  if (!config.backgroundJobsEnabled && process.env.POINTER_CATALOG_JOBS_ENABLED === "true") {
+    let failures = 0;
+    const run = async () => {
+      let interval = 6 * 60 * 60 * 1000;
+      try {
+        const settings = await operationalSettings(); interval = settings.sourceRefreshHours * 60 * 60 * 1000;
+        const successful = await refreshSources(); failures = successful ? 0 : failures + 1;
+      } catch { failures++; console.error("[sources] Scheduled refresh failed"); }
+      finally { setTimeout(() => void run(), sourceRefreshDelayMs(interval, failures)).unref(); }
+    };
+    setTimeout(() => void run().catch(() => console.error("[sources] Initial refresh failed")), 5000).unref();
+  }
 
   if (!config.backgroundJobsEnabled) {
     console.log("[pointer] Background synchronization and maintenance disabled");
@@ -41,26 +77,6 @@ async function startup() {
       console.error("[pointer] Periodic model sync failed");
     }
   }, 60 * 60 * 1000);
-
-  const refreshSources = async (): Promise<boolean> => {
-    try {
-      const results = await sourceSync.refreshAll();
-      let failed = false;
-      for (const { sourceId, result } of results) {
-        if (result.status === "rejected") {
-          failed = true;
-          console.error(`[sources] ${sourceId} sync failed`);
-        }
-      }
-      if (results.some(({ result }) => result.status === "fulfilled" && result.value !== null)) {
-        await scheduleCanonicalCatalogSync();
-      }
-      return !failed;
-    } catch {
-      console.error("[catalog] Canonical sync failed");
-      return false;
-    }
-  };
 
   let nextSourceRefreshAt = 0;
   let sourceRefreshFailures = 0;
@@ -162,6 +178,8 @@ if (config.mode === "standalone") {
   );
 }
 
+startUsageReceiptReplay();
+
 let shuttingDown = false;
 async function shutdown(signal: string) {
   if (shuttingDown) return;
@@ -169,6 +187,7 @@ async function shutdown(signal: string) {
   console.log(`[pointer] ${signal}: draining usage writes`);
   const drained = await drainUsageWrites();
   for (const server of servers) server.stop(true);
+  await enginePool.stop();
   if (!drained) console.error("[pointer] Usage write drain timed out");
   process.exit(drained ? 0 : 1);
 }

@@ -2,6 +2,7 @@ import {
   parseDeploymentCapabilities,
   type DeploymentCapabilities,
 } from "@pointer/contracts/capabilities";
+import { getHostRuntime, navigatePointer, pointerStorage } from "./host-runtime";
 
 // Env-driven API client. Pointer web is a pure client of Pointer server:
 // every backend behavior lives in the server and is reached over HTTP with a Bearer
@@ -25,13 +26,19 @@ const TOKEN_KEY = "pointer_token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return pointerStorage.getItem(TOKEN_KEY);
 }
 export function setToken(token: string): void {
-  window.localStorage.setItem(TOKEN_KEY, token);
+  pointerStorage.setItem(TOKEN_KEY, token);
 }
 export function clearToken(): void {
-  window.localStorage.removeItem(TOKEN_KEY);
+  pointerStorage.removeItem(TOKEN_KEY);
+}
+
+export function pointerFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const host = getHostRuntime();
+  return host ? host.request(path, { ...init, signal: init.signal
+    ? AbortSignal.any([init.signal, host.signal]) : host.signal }) : fetch(requestUrl(path), init);
 }
 
 export class ApiError extends Error {
@@ -59,7 +66,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(requestUrl(path), {
+  const res = await pointerFetch(path, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -68,8 +75,10 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   // Redirect to login on auth failure for management calls.
   if (res.status === 401 && auth) {
     clearToken();
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = runtimePath("/login");
+    const host = getHostRuntime();
+    if (host) host.onUnauthorized();
+    else if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      navigatePointer(runtimePath("/login"));
     }
   }
 
@@ -91,6 +100,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
+  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
@@ -110,7 +120,7 @@ export async function streamModelTest(
   },
 ) {
   const token = getToken();
-  const response = await fetch(requestUrl("/api/test-model"), {
+  const response = await pointerFetch("/api/test-model", {
     method: "POST",
     headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ ...body, stream: true }),
@@ -187,13 +197,14 @@ export async function streamModelTest(
 export async function streamChat(
   apiKey: string,
   body: unknown,
-  handlers: { onDelta: (text: string) => void; onDone: () => void; onError: (msg: string) => void }
+  handlers: { onDelta: (text: string) => void; onDone: () => void; onError: (msg: string) => void },
+  sessionId?: string
 ): Promise<void> {
   let res: Response;
   try {
-    res = await fetch(requestUrl("/v1/chat/completions"), {
+    res = await pointerFetch("/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...(sessionId ? {"x-opencode-session":sessionId} : {}) },
       body: JSON.stringify(body),
     });
   } catch (err: any) {
@@ -232,6 +243,7 @@ export async function streamChat(
       }
       try {
         const chunk = JSON.parse(payload);
+        if (chunk.error) { handlers.onError(chunk.error.message || "Inference failed"); return; }
         const delta = chunk.choices?.[0]?.delta?.content;
         if (delta) handlers.onDelta(delta);
       } catch {
@@ -239,5 +251,5 @@ export async function streamChat(
       }
     }
   }
-  handlers.onDone();
+  handlers.onError("The model stream ended before completion.");
 }

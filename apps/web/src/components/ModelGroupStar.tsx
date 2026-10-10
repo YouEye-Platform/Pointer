@@ -64,7 +64,7 @@ export function ModelGroupStar({
   useEffect(() => {
     if (!open) return;
     function outside(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) close();
+      if (!rootRef.current || !event.composedPath().includes(rootRef.current)) close();
     }
     function escape(event: KeyboardEvent) {
       if (event.key === "Escape") {

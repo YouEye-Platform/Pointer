@@ -3,7 +3,7 @@ import type { JsonObject, JsonValue } from "./protocol/v1/schemas";
 export type GatewayCapability = "tools" | "vision" | "streaming";
 
 export interface GatewayModelCapabilities {
-  tools: boolean;
+  tools: boolean | null;
   vision: boolean;
   streaming: boolean;
 }
@@ -60,7 +60,7 @@ function requestsTools(value: JsonValue | undefined): boolean {
 
 export function requestedGatewayCapabilities(body: JsonObject): GatewayCapability[] {
   const requested: GatewayCapability[] = [];
-  if (requestsTools(body.tools)
+  if (requestsTools(body.tools) || requestsTools(body.additional_tools) || requestsToolHistory(body)
     || (Array.isArray(body.functions) && body.functions.length > 0)) {
     requested.push("tools");
   }
@@ -69,9 +69,20 @@ export function requestedGatewayCapabilities(body: JsonObject): GatewayCapabilit
   return requested;
 }
 
+function requestsToolHistory(value: JsonValue, depth = 0): boolean {
+  if (depth > 32 || value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(item => requestsToolHistory(item, depth + 1));
+  if (value.role === "tool" || value.role === "function"
+    || ["function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output", "tool_use", "tool_result"].includes(String(value.type))) return true;
+  if (value.type === "additional_tools" && requestsTools(value.tools)) return true;
+  if (Array.isArray(value.tool_calls) && value.tool_calls.length) return true;
+  if (value.functionCall || value.functionResponse) return true;
+  return Object.values(value).some(item => requestsToolHistory(item, depth + 1));
+}
+
 export function unsupportedGatewayCapability(
   body: JsonObject,
   capabilities: GatewayModelCapabilities,
 ): GatewayCapability | null {
-  return requestedGatewayCapabilities(body).find((capability) => !capabilities[capability]) ?? null;
+  return requestedGatewayCapabilities(body).find((capability) => capabilities[capability] === false) ?? null;
 }

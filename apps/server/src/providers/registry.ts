@@ -28,6 +28,7 @@ import { validatePublicHttpsEndpoint } from "../services/custom-endpoint";
 
 export interface ResolvedProvider {
   manifest: ProviderManifest;
+  endpointWireCapabilities?: import("../gateway/wire-capabilities").WireCapabilityOverrides;
   handler: IProviderHandler | null;
   dbRecord: typeof schema.providers.$inferSelect;
 }
@@ -202,15 +203,16 @@ class ProviderRegistry {
     )).limit(1);
     if (!account) return null;
     const endpointMode = resolved.manifest.endpoint?.mode ?? "fixed";
-    if (endpointMode === "fixed") return resolved;
+    const configured = { ...resolved, endpointWireCapabilities: account.wireCapabilities };
+    if (endpointMode === "fixed") return configured;
     if (!account.baseUrl) return null;
     const baseUrl = await validatePublicHttpsEndpoint(account.baseUrl).catch(() => null);
     if (!baseUrl) return null;
     const discovery = resolved.manifest.models?.discovery;
     return {
-      ...resolved,
+      ...configured,
       manifest: {
-        ...resolved.manifest,
+        ...configured.manifest,
         baseUrl,
         models: resolved.manifest.models ? {
           ...resolved.manifest.models,

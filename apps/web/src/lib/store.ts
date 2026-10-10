@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { api, getToken, setToken, clearToken, runtimePath } from "./api";
+import { getHostRuntime, navigatePointer } from "./host-runtime";
 
 export interface User {
   id: string;
@@ -24,6 +25,8 @@ export const useAuth = create<AuthState>((set) => ({
   token: null,
   loading: true,
   hydrate: async () => {
+    const host = getHostRuntime();
+    if (host) { set({ user: host.user, token: null, loading: false }); return; }
     const token = getToken();
     if (!token) {
       set({ loading: false, user: null, token: null });
@@ -42,8 +45,10 @@ export const useAuth = create<AuthState>((set) => ({
     set({ token, user, loading: false });
   },
   logout: () => {
+    const host = getHostRuntime();
+    if (host) { host.onSignOut(); return; }
     clearToken();
     set({ user: null, token: null });
-    if (typeof window !== "undefined") window.location.href = runtimePath("/login");
+    if (typeof window !== "undefined") navigatePointer(runtimePath("/login"));
   },
 }));

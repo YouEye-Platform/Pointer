@@ -7,9 +7,11 @@
     "build": "pnpm build:server && pnpm build:web",
     "build:server": "pnpm --filter @pointer/server build && pnpm --filter @pointer/cli build",
     "build:web": "pnpm --filter @pointer/web build",
-    "typecheck": "pnpm --filter @pointer/contracts typecheck && pnpm --filter @pointer/server typecheck && pnpm --filter @pointer/cli typecheck && pnpm --filter @pointer/web typecheck",
+    "typecheck": "pnpm typecheck:engine && pnpm --filter @pointer/contracts typecheck && pnpm --filter @pointer/server typecheck && pnpm --filter @pointer/cli typecheck && pnpm --filter @pointer/web typecheck",
     "test": "pnpm test:unit",
-    "test:unit": "pnpm --filter @pointer/server test && pnpm --filter @pointer/cli test && bun test scripts/*.test.mjs",
+    "test:engine": "pnpm --filter @pointer/engine test",
+    "typecheck:engine": "pnpm --filter @pointer/engine typecheck",
+    "test:unit": "pnpm test:engine && pnpm --filter @pointer/server test && pnpm --filter @pointer/cli test && bun test scripts/*.test.mjs",
     "test:postgres": "bash scripts/run-postgres-tests.sh",
     "test:e2e": "pnpm --filter @pointer/web test:e2e",
     "contracts:generate": "pnpm --filter @pointer/contracts generate",
@@ -36,5 +38,6 @@
   "packageManager": "pnpm@10.6.2",
   "engines": {
     "node": "22.23.2"
-  }
+  },
+  "license": "MIT"
 }

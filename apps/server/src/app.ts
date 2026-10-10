@@ -18,6 +18,7 @@ import adminRoutes from "./routes/admin";
 import authRoutes from "./routes/auth";
 import catalogRoutes from "./routes/catalog";
 import codexAuthRoutes from "./routes/codex-auth";
+import connectionsRoutes from "./routes/connections";
 import instancesRoutes from "./routes/instances";
 import keysRoutes from "./routes/keys";
 import modelGroupsRoutes from "./routes/model-groups";
@@ -25,10 +26,12 @@ import modelsRoutes from "./routes/models";
 import platformRoutes from "./routes/platform";
 import providersRoutes from "./routes/providers";
 import providerAccountsRoutes from "./routes/provider-accounts";
-import proxyRoutes, { googleProxyRoutes } from "./routes/proxy";
+import googleProxyRoutes from "./routes/google";
+import inferenceRoutes from "./routes/inference";
 import sourcesRoutes from "./routes/sources";
 import statsRoutes from "./routes/stats";
 import testModelRoutes from "./routes/test-model";
+import { createUiAssetsRoutes } from "./routes/ui-assets";
 import { auditManagementAction } from "./services/management-audit";
 import { buildInfo } from "./services/build-info";
 import { readiness } from "./services/readiness";
@@ -203,6 +206,8 @@ function protect(
 }
 
 function mountManagementRoutes(app: Hono<AppEnv>) {
+  app.route("/_pointer/ui", createUiAssetsRoutes());
+  protect(app, "/api/connections/*", "management.read", "providers.manage");
   protect(app, "/api/providers/*", "management.read", "providers.manage");
   protect(app, "/api/provider-accounts/*", "management.read", "providers.manage");
   protect(app, "/api/instances/*", "management.read", "applications.provision");
@@ -216,6 +221,7 @@ function mountManagementRoutes(app: Hono<AppEnv>) {
   protect(app, "/api/codex-auth/*", "management.read", "providers.manage");
 
   app.route("/api/auth", authRoutes);
+  app.route("/api/connections", connectionsRoutes);
   app.route("/api/providers", providersRoutes);
   app.route("/api/provider-accounts", providerAccountsRoutes);
   app.route("/api/instances", instancesRoutes);
@@ -234,7 +240,7 @@ function mountInferenceRoutes(app: Hono<AppEnv>) {
   app.use("/v1/*", gatewayRequestIdMiddleware());
   app.use("/v1beta/*", gatewayRequestIdMiddleware());
   app.route("/v1", modelsRoutes);
-  app.route("/v1", proxyRoutes);
+  app.route("/v1", inferenceRoutes);
   app.route("/v1beta", googleProxyRoutes);
 }
 

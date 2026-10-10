@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm build:embed && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "next lint",
     "prepare:standalone": "node scripts/prepare-standalone.mjs",
     "test": "pnpm build && pnpm prepare:standalone && playwright test",
     "test:e2e": "pnpm build && pnpm prepare:standalone && playwright test",
-    "test:e2e:headed": "pnpm build && pnpm prepare:standalone && playwright test --headed"
+    "test:e2e:headed": "pnpm build && pnpm prepare:standalone && playwright test --headed",
+    "build:embed": "bun scripts/build-embed.mjs"
   },
   "dependencies": {
     "@pointer/contracts": "workspace:*",

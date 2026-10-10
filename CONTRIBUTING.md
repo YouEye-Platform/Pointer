@@ -4,14 +4,15 @@
 
 Pointer is a pnpm monorepo. `apps/server` owns service, persistence,
 migrations, managed-host behavior, and release metadata. `apps/web` is the
-optional standalone browser product; do not make it part of the YouEye-managed
-server artifact. `packages/contracts` owns generated API contracts and
+optional standalone browser product and the shared host-React UI module. The
+managed artifact includes the shared module, font/icon notices and persistent
+engine runtime; keep the standalone Next.js server separate. `packages/contracts` owns generated API contracts and
 `packages/cli` owns the command-line client.
 
 ## Development
 
 Use the root-pinned toolchain: Node.js 22.23.2, pnpm 10.6.2, TypeScript 5.9.3,
-and Bun 1.3.x. Install with `pnpm install --frozen-lockfile`; use pnpm for all
+and Bun 1.4.2. Install with `pnpm install --frozen-lockfile`; use pnpm for all
 workspace commands. Before proposing a cross-component change, run the
 relevant offline-safe root gates, beginning with `pnpm public-source:check`, `pnpm typecheck`,
 `pnpm contracts:check`, and the focused unit tests.
@@ -24,7 +25,10 @@ from ordinary unit tests.
 ## Managed server boundary
 
 The YouEye build is `.youeye/build/pointer`. It is headless, network-denied,
-and produces an unsigned `standalone.tar`; keep the committed
+and produces an unsigned `standalone.tar`. It selects the exact Bun1.4.2
+`youeye-pointer-build-kit-v2` and `pointer-opencodex-v2` validator. Preserve
+the OpenCodex2.79.0 pin, private engine state and matching UI content hashes.
+Keep the committed
 `youeye.build.v2` manifest, `build_kind`, validation/profile values, trust
 boundary, executor identity, and output role unchanged unless the owning
 platform changes them. Release metadata names Pointer's public product identity

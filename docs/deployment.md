@@ -56,7 +56,7 @@ Copy the `.tgz` and matching `.sha256` files over an authenticated channel.
 Verify each sidecar on the target before extraction.
 
 The YouEye entrypoint additionally requires the exact source commit, source
-epoch, dedicated work/output directories, Node 22.23.2, pnpm 10.6.2, Bun 1.3.x,
+epoch, dedicated work/output directories, Node 22.23.2, pnpm 10.6.2, Bun 1.4.2,
 and the reviewed offline pnpm store supplied by the permanent builder. It fails
 on a mismatched checkout, invalid optional checkout source locator, moving
 dependency resolution, network fallback, or an ambiguous output directory.
@@ -185,10 +185,8 @@ the full prompt; Messages input, cache-read and cache-creation are disjoint
 buckets and must not be double-counted. Incremental stream tests are required:
 rendering the entire completed trace at once does not exercise late usage.
 
-Responses-to-Responses routing retains native tool-search, custom-tool,
-namespaced function and web-search items, including deferred tool definitions
-and call IDs. These items are protocol-scoped IR extensions, not ordinary text
-or JSON function calls. A different API family must reject them explicitly when
-it cannot preserve their semantics. Streams require a completed native item
-before successful termination; native item events and final usage are both
-retained. See the [OpenAI tool-search contract](https://developers.openai.com/api/docs/guides/tools-tool-search).
+Responses-to-Responses and cross-protocol routes use shared semantic tool codecs.
+Native extended tools remain native where supported; standard destinations receive
+reversible namespace aliases and string-argument functions. Server-side tools and
+opaque reasoning replay without an equivalent representation fail explicitly.
+See [endpoint capabilities and conformance](gateway-capabilities.md).

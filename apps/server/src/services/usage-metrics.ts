@@ -1,3 +1,4 @@
+import type {EngineFailureReceipt} from "./engine-failure-receipt";
 export type UsageOutcome =
   | "success"
   | "upstream_error"
@@ -7,6 +8,7 @@ export type UsageOutcome =
   | "incomplete_stream";
 
 export interface ExtendedMetrics {
+  failureReceipt?: EngineFailureReceipt;
   cachedTokens?: number;
   reasoningTokens?: number;
   cacheCreationTokens?: number;
@@ -17,6 +19,7 @@ export interface ExtendedMetrics {
   observedGenerationMs?: number;
   processingMs?: number;
   errorType?: string;
+  upstreamErrorCode?: string | null;
   errorMessage?: string;
   outcome?: UsageOutcome;
 }

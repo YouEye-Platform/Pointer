@@ -281,7 +281,8 @@ const responsesReasoningItemSchema = z
     id: z.string().optional(),
     status: z.string().optional(),
     summary: z.array(z.object({ type: z.literal("summary_text"), text: z.string() }).strict()).optional(),
-    encrypted_content: z.string().optional(),
+    encrypted_content: z.string().nullable().optional(),
+    content: z.null().optional(),
   })
   .strict();
 const responsesInputItemSchema = z.union([
@@ -300,6 +301,7 @@ const responsesFunctionToolSchema = z
     description: z.string().optional(),
     parameters: jsonObjectSchema.optional(),
     strict: z.boolean().optional(),
+    defer_loading: z.boolean().optional(),
   })
   .strict();
 const responsesBuiltinToolSchema = z
@@ -309,7 +311,7 @@ const responsesBuiltinToolSchema = z
 
 const responsesToolChoiceSchema = z.union([
   z.enum(["none", "auto", "required"]),
-  z.object({ type: z.literal("function"), name: z.string().min(1) }).strict(),
+  z.object({ type: z.enum(["function", "custom"]), name: z.string().min(1), namespace: z.string().min(1).optional() }).strict(),
 ]);
 
 export const responsesRequestSchema = z

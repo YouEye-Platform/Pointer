@@ -52,8 +52,15 @@ export function parsePublicError(
   }
   const mode = context.mode ?? "best-effort";
   const contextRejected = isContextRejection(input.body);
+  const root = input.body && typeof input.body === "object" && !Array.isArray(input.body) ? input.body as Record<string, unknown> : {};
+  const upstream = root.error && typeof root.error === "object" && !Array.isArray(root.error) ? root.error as Record<string, unknown> : root;
+  // Parameter paths only, never provider prose, URLs, tokens or arbitrary codes.
+  const param = typeof upstream.param === "string" && /^(input|tools|tool_choice|reasoning|text|model|messages|contents|generationConfig)(\.[a-z_]+|\[\d+\]){0,8}$/.test(upstream.param) ? upstream.param : undefined;
+  const rejected = input.status === 400 || input.status === 422;
   const status = contextRejected ? 400 : input.status;
-  const allowlistedMetadata = extractAllowlistedUpstreamMetadata(input.headers);
+  const codes = ["invalid_request_error", "invalid_value", "invalid_parameter", "unsupported_parameter", "unsupported_tool", "context_length_exceeded", "context_window_exceeded", "prompt_too_long", "rate_limit_exceeded", "model_not_found", "insufficient_quota"];
+  const safeCode = typeof upstream.code === "string" && codes.includes(upstream.code) ? upstream.code : typeof upstream.type === "string" && codes.includes(upstream.type) ? upstream.type : undefined;
+  const allowlistedMetadata = extractAllowlistedUpstreamMetadata({ ...input.headers, ...(safeCode ? { "x-error-code": safeCode } : {}) });
   const diagnostic = createSafeUpstreamDiagnostic({
     requestId: requestId.data,
     errorClass: "http",
@@ -72,7 +79,8 @@ export function parsePublicError(
     status,
     type: "pointer_gateway_error",
     code: contextRejected ? "pointer_context_length_exceeded" : errorCodeForUpstreamStatus(status),
-    message: contextRejected ? "Prompt is too long for the selected model. Compact the conversation before retrying." : diagnostic.message,
+    ...(param ? { param } : {}),
+    message: contextRejected ? "Prompt is too long for the selected model. Compact the conversation before retrying." : rejected ? "The provider rejected the request. Check the endpoint capabilities and the indicated parameter." : input.status === 404 || input.status === 405 ? "The provider model or API endpoint was not found." : diagnostic.message,
     ...(diagnostic.retryAfterMs !== null ? { retryAfterMs: diagnostic.retryAfterMs } : {}),
     diagnostics: diagnostic,
   });

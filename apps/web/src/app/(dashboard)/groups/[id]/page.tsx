@@ -1,4 +1,5 @@
 "use client";
+import { GroupRouting } from "@/components/GroupRouting";
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -143,6 +144,7 @@ export default function GroupDetailPage() {
       </div>
       <div className="notice" role="note"><strong>Automatic routing aliases:</strong> the first enabled model receives big / opus / default, the second medium / sonnet / secondary, and the third small / haiku / utility. They are accepted by the gateway but not listed by the models API.</div>
       {error && <div className="notice danger" role="alert">{error}</div>}
+      <GroupRouting groupId={id} entries={group.entries} />
       {group.entries.length === 0 ? (
         <div className="card empty-state"><h2>No models in this group</h2><p className="muted">Add an available model to establish the first routing slot.</p><button className="btn-primary" onClick={() => setAdding(true)}>Add model</button></div>
       ) : (

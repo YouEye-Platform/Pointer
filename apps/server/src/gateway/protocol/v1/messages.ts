@@ -30,6 +30,7 @@ import {
   zodIssues,
 } from "./common";
 import { messagesRequestSchema, messagesResponseSchema } from "./public-schemas";
+import {decodeReasoningEnvelope,encodeReasoningEnvelope} from './reasoning-envelope';
 import {
   finishReasonForFormat,
   normalizeFinishReason,
@@ -150,7 +151,8 @@ function messageBlocks(
       continue;
     }
     if (raw.type === "redacted_thinking" && typeof raw.data === "string") {
-      blocks.push({ type: "reasoning", text: "", encryptedContent: raw.data });
+      try { blocks.push(decodeReasoningEnvelope(raw.data) ?? { type: "reasoning", text: "", encryptedContent: raw.data, encryptedSourceFormat: FORMAT }); }
+      catch { findings.push(finding(FORMAT, blockPath, "unsupported", "pointer_content_block_invalid", "Invalid reasoning envelope.")); }
       continue;
     }
     findings.push(finding(FORMAT, blockPath, "unsupported", "pointer_content_block_unsupported", `Messages content block ${raw.type} is not supported.`));
@@ -318,7 +320,7 @@ function emitBlock(
     };
   }
   if (block.type === "reasoning") {
-    if (block.encryptedContent) return { type: "redacted_thinking", data: block.encryptedContent };
+    if (block.encryptedContent) return { type: "redacted_thinking", data: (block.encryptedSourceFormat ?? sourceFormat) === FORMAT ? block.encryptedContent : encodeReasoningEnvelope(block,sourceFormat) };
     if (!block.signature) {
       findings.push(finding(sourceFormat, `${path}.signature`, "unsupported", "pointer_messages_reasoning_signature_missing", "Messages thinking requires a source signature; the adapter will not fabricate one.", FORMAT));
       return null;
@@ -486,7 +488,7 @@ export function renderMessagesResponse(
   const content = response.output.map((block, index) => emitBlock(block, `output.${index}`, response.sourceFormat, findings)).filter((block): block is JsonObject => block !== null);
   for (const [index, block] of response.output.entries()) {
     const itemId = block.type === "tool_call" ? block.itemId : block.id;
-    if (itemId) {
+    if (itemId && !(block.type === 'reasoning' && block.encryptedContent && (block.encryptedSourceFormat ?? response.sourceFormat) !== FORMAT)) {
       findings.push(finding(response.sourceFormat, `output.${index}.id`, "lossy", "pointer_messages_output_item_id_dropped", "Messages has no per-content output item ID.", FORMAT));
     }
   }

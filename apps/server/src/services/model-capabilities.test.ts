@@ -100,7 +100,7 @@ describe("discovered model capability fallbacks", () => {
     );
 
     expect(capabilities).toEqual({
-      supportsTools: false,
+      supportsTools: null,
       supportsVision: false,
       supportsStreaming: true,
     });

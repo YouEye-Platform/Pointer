@@ -1,3 +1,6 @@
+import { createToolStreamCodec } from "./tool-stream-codec";
+import type { WireCapabilities } from "../../wire-capabilities";
+import type { ToolCodecContext } from "./tool-codec";
 import { isRecord } from "./common";
 import type { GatewayApiFormat } from "../../compatibility";
 import type {
@@ -30,6 +33,7 @@ export interface GatewayProxyRequestSelectionSuccess {
   ok: true;
   primaryEngine: "v1";
   request: JsonObject;
+  toolContext?: ToolCodecContext;
 }
 
 export interface GatewayProxyRequestSelectionFailure {
@@ -47,6 +51,7 @@ export interface GatewayProxyRequestSelectionInput {
   targetFormat: GatewayApiFormat;
   payload: unknown;
   providerModelId: string;
+  wireCapabilities?: WireCapabilities;
 }
 
 export interface GatewayProxyResponseSelectionSuccess {
@@ -70,12 +75,14 @@ export interface GatewayProxyResponseSelectionInput {
   targetFormat: GatewayApiFormat;
   payload: unknown;
   model: string;
+  toolContext?: ToolCodecContext;
 }
 
 export interface GatewayProxyErrorSelectionInput {
   sourceFormat: GatewayApiFormat;
   targetFormat: GatewayApiFormat;
   status: number;
+  body?: unknown;
   headers?: Readonly<Record<string, string>>;
   requestId: string;
 }
@@ -176,13 +183,30 @@ export function selectGatewayProxyRequest(
     targetFormat: input.targetFormat,
     payload: input.payload,
     model: input.providerModelId,
+    wireCapabilities: input.wireCapabilities,
   });
-  if ("ok" in execution) return publicAdapterFailure(input.sourceFormat, execution);
+  if ("ok" in execution) {
+    console.warn("[gateway-contract]", JSON.stringify({sourceFormat:input.sourceFormat,targetFormat:input.targetFormat,code:execution.error.code,issues:requestFailureShapes(input.payload,execution.error.issues.map(issue=>issue.path))}));
+    return publicAdapterFailure(input.sourceFormat, execution);
+  }
   return {
     ok: true,
     primaryEngine: "v1",
     request: { ...execution.value, model: input.providerModelId },
+    toolContext: execution.toolContext,
   };
+}
+
+/** Structural diagnostics only: no prompts, argument values, names or keys
+ * outside this fixed public-protocol vocabulary enter the service log. */
+export function requestFailureShapes(payload: unknown, paths: string[]) {
+  const fields=new Set(['type','name','description','input_schema','parameters','cache_control','defer_loading','caller','signature','data','thinking','text','id','input','tool_use_id','content','is_error','role','tool_reference','tool_name']);
+  const types=new Set(['text','image','tool_use','tool_result','thinking','redacted_thinking','tool_reference','function','custom']);
+  const shape=(value:unknown,depth=0):unknown=>Array.isArray(value)?{kind:'array',...(depth<3?{items:value.slice(0,8).map(item=>shape(item,depth+1))}:{})}:isRecord(value)?{kind:'object',type:typeof value.type==='string'&&types.has(value.type)?value.type:undefined,keys:Object.keys(value).slice(0,32).map(k=>fields.has(k)?k:'other')}:value===null?'null':typeof value;
+  return paths.slice(0,8).map(path=>{
+    let value:unknown=payload;for(const segment of path.split('.')){if(segment==='request')continue;value=value !== null && typeof value === 'object' ? (value as Record<string,unknown>)[segment] : undefined;}
+    return {path:path.split('.').map(k=>/^\d+$/.test(k)||fields.has(k)||['request','messages','tools','system','max_tokens'].includes(k)?k:'other').join('.'),shape:shape(value)};
+  });
 }
 
 // A provider's public text can be represented by every supported response API.
@@ -225,7 +249,7 @@ export function selectGatewayProxyError(
   const parsed = parsePublicError(input.sourceFormat, {
     status: input.status,
     headers: input.headers,
-    body: null,
+    body: input.body ?? null,
   }, { requestId: input.requestId });
   if (!parsed.ok) {
     const failure = publicResponseFailure(input.targetFormat);
@@ -249,6 +273,7 @@ export interface GatewayProxyStreamSelectorInput {
   sourceFormat: GatewayApiFormat;
   targetFormat: GatewayApiFormat;
   model: string;
+  toolContext?: ToolCodecContext;
   requestId: string;
   toolSchemas?: Readonly<Record<string, JsonObject>>;
 }
@@ -432,7 +457,9 @@ function sourceEventType(event: PublicStreamEvent): string | null {
 export function createGatewayProxyStreamSelector(
   input: GatewayProxyStreamSelectorInput,
 ): GatewayProxyStreamSelector {
-  let context: StreamAdapterContext = createStreamAdapterContext(input.model, input.requestId);
+  const restoreTools = createToolStreamCodec(input.toolContext);
+  let context: StreamAdapterContext = createStreamAdapterContext(input.model, input.requestId, undefined,
+    input.sourceFormat === "responses" && input.targetFormat === "responses");
   const events: IrStreamEvent[] = [];
   let renderedCount = 0;
   let failed = false;
@@ -444,7 +471,13 @@ export function createGatewayProxyStreamSelector(
   const bufferedToolArguments = new Map<number, { callId: string; schema: JsonObject; chunks: string[] }>();
 
   const containsOutput = (items: readonly IrStreamEvent[]): boolean => items.some((item) =>
-    item.type === "responses_native_event"
+    (item.type === "responses_native_event" && (
+      (typeof item.data.delta === "string" && item.data.delta.length > 0)
+      || (typeof item.data.item === "object" && item.data.item !== null && !Array.isArray(item.data.item)
+        && (item.data.item.type !== "message" || (Array.isArray(item.data.item.content)
+          && item.data.item.content.some(part => typeof part === "object" && part !== null && !Array.isArray(part)
+            && ((typeof part.text === "string" && part.text.length > 0) || (typeof part.refusal === "string" && part.refusal.length > 0))))))
+    ))
     || item.type === "tool_call_start"
     || (item.type === "text_delta" && item.delta.length > 0)
     || (item.type === "reasoning_delta" && item.delta.length > 0)
@@ -464,7 +497,7 @@ export function createGatewayProxyStreamSelector(
     if (error?.type === "error") upstreamError = error.error;
     upstreamFailed = true;
     const rendered = renderPublicStreamTrace(input.targetFormat, events);
-    const lines = rendered.slice(renderedCount).map(encodePublicStreamEvent);
+    const lines = rendered.slice(renderedCount).flatMap(restoreTools).map(encodePublicStreamEvent);
     renderedCount = rendered.length;
     return lines;
   };
@@ -503,7 +536,8 @@ export function createGatewayProxyStreamSelector(
           if (schema && input.targetFormat === "messages") {
             bufferedToolArguments.set(item.index, { callId: item.callId, schema, chunks: [] });
           }
-          nextEvents.push(item);
+          const identity = input.targetFormat !== "responses" ? input.toolContext?.aliases[item.name] : undefined;
+          nextEvents.push(identity ? { ...item, name: identity.name } : item);
           continue;
         }
         if (item.type === "tool_arguments_delta") {
@@ -537,10 +571,16 @@ export function createGatewayProxyStreamSelector(
         if (error?.type === "error") upstreamError = error.error;
       }
     }
-    const rendered = renderPublicStreamTrace(input.targetFormat, events);
-    const lines = rendered.slice(renderedCount).map(encodePublicStreamEvent);
-    renderedCount = rendered.length;
-    return lines;
+    try {
+      const rendered = renderPublicStreamTrace(input.targetFormat, events);
+      const lines = rendered.slice(renderedCount).flatMap(restoreTools).map(encodePublicStreamEvent);
+      renderedCount = rendered.length;
+      return lines;
+    } catch {
+      failed = true;
+      failure = { kind: "translation", sourceEventType: lastSourceEventType, outputObserved };
+      return safeStreamFailure(input.targetFormat);
+    }
   };
 
   return {

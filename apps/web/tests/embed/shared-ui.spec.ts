@@ -1,0 +1,34 @@
+import { expect, test } from "@playwright/test";
+
+test("full screens share React, isolate hosts and unmount without changing the host", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem("pointer_token", "must-not-enter-embedded-requests"));
+  await page.goto("/");
+  const first = page.locator("#pointer-one");
+  const second = page.locator("#pointer-two");
+  await expect(first.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await expect(second.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await expect(first.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Host count 0" }).click();
+  await expect(page.getByRole("button", { name: "Host count 1" })).toHaveCSS("color", "rgb(18, 52, 86)");
+  expect(await page.locator("html").getAttribute("data-theme")).toBe("light");
+  expect(await page.locator("iframe").count()).toBe(0);
+  await first.getByRole("button", { name: "Menu", exact: true }).click();
+  await first.getByRole("link", { name: "Model Groups", exact: true }).click();
+  await expect(first.getByRole("heading", { name: "Model Groups", exact: true })).toBeVisible();
+  await expect(second.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await first.getByRole("button", { name: "New group", exact: true }).click();
+  await expect(first.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(first.getByRole("dialog")).not.toBeVisible();
+  await expect(first.getByRole("button", { name: "New group", exact: true })).toBeFocused();
+  expect(await page.evaluate(() => (window as any).fixtureRequests)).toContain("pointer-one:/api/groups");
+  await page.screenshot({ path: "test-results/pointer-shared-ui.png", fullPage: true });
+  await page.evaluate(() => (window as any).pointerOne.unmount());
+  await expect(first.getByRole("heading")).toHaveCount(0);
+  await expect(second.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Host count 1" }).click();
+  await expect(page.getByRole("button", { name: "Host count 2" })).toBeVisible();
+  expect(errors).toEqual([]);
+});

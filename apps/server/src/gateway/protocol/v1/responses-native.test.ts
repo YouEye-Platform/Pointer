@@ -6,14 +6,15 @@ const result = { type: "tool_search_output", call_id: "call_1", execution: "clie
 const namespaced = { type: "function_call", id: "fc_2", call_id: "call_2", name: "environment", namespace: "crew", arguments: "{}" };
 const custom = { type: "custom_tool_call", id: "ct_3", call_id: "call_3", name: "apply_patch", input: "patch text" };
 
-test("Codex additional tool declarations preserve exact definitions and ordering", () => {
+test("Codex additional tool declarations preserve native definitions and hoist portably", () => {
   const item = { type: "additional_tools", role: "developer", id: "tools_1", tools: [{ type: "namespace", name: "functions", tools: [{ type: "function", name: "exec", parameters: { type: "object" } }] }] };
   const input = [item, { type: "message", role: "user", content: [{ type: "input_text", text: "Run the tool" }] }];
   const selected = selectGatewayProxyRequest({ sourceFormat: "responses", targetFormat: "responses", providerModelId: "provider", payload: { model: "public", input } });
   expect(selected.ok).toBe(true);
   if (selected.ok) expect(selected.request.input).toEqual(input);
   const cross = selectGatewayProxyRequest({ sourceFormat: "responses", targetFormat: "messages", providerModelId: "provider", payload: { model: "public", input } });
-  expect(cross.ok).toBe(false);
+  expect(cross.ok).toBe(true);
+  if (cross.ok) expect(cross.request.tools).toHaveLength(1);
   const invalid = selectGatewayProxyRequest({ sourceFormat: "responses", targetFormat: "responses", providerModelId: "provider", payload: { model: "public", input: [{ ...item, tools: "invalid" }] } });
   expect(invalid.ok).toBe(false);
 });
@@ -36,7 +37,8 @@ test("native tool items survive a Responses continuation with IDs and definition
   expect(selected.ok).toBe(true);
   if (selected.ok) expect(selected.request.input).toEqual(input);
   const cross = selectGatewayProxyRequest({ sourceFormat: "responses", targetFormat: "messages", providerModelId: "provider", payload: { model: "public", input } });
-  expect(cross.ok).toBe(false);
+  expect(cross.ok).toBe(true);
+  if (cross.ok) expect(JSON.stringify(cross.request)).toContain("call_1");
   const invalid = selectGatewayProxyRequest({ sourceFormat: "responses", targetFormat: "responses", providerModelId: "provider", payload: { model: "public", input: [{ type: "tool_search_output", tools: "invalid" }] } });
   expect(invalid.ok).toBe(false);
 });
@@ -65,6 +67,26 @@ for (const item of [call, custom, namespaced]) test(`stream ${item.type} keeps n
   expect(terminal.response.output).toEqual([item]);
   expect(terminal.response.usage.input_tokens).toBe(12);
   expect(selector.finish().lines).toEqual([]);
+});
+
+test("Crew custom-tool-only stream remains a successful native Responses result", () => {
+  const selector = createGatewayProxyStreamSelector({ sourceFormat: "responses", targetFormat: "responses", model: "public", requestId: "crew-custom" });
+  const lines: string[] = [];
+  for (const data of [
+    { type: "response.created", response: { id: "resp_crew", model: "provider" } },
+    { type: "response.output_item.added", output_index: 0, item: custom },
+    { type: "response.output_item.done", output_index: 0, item: custom },
+    { type: "response.completed", response: { id: "resp_crew", model: "provider", status: "completed", output: [custom], usage: { input_tokens: 20, output_tokens: 4, total_tokens: 24 } } },
+  ]) lines.push(...selector.push({ event: data.type, data }).lines);
+
+  const events = lines.map(line => JSON.parse(line.split("data: ")[1]!));
+  expect(selector.failed()).toBe(false);
+  expect(selector.ended()).toBe(true);
+  expect(events.map(event => event.type)).toContain("response.output_item.added");
+  expect(events.map(event => event.type)).toContain("response.output_item.done");
+  const completed = events.find(event => event.type === "response.completed");
+  expect(completed.response.output).toEqual([custom]);
+  expect(completed.response.usage).toEqual({ input_tokens: 20, output_tokens: 4, total_tokens: 24 });
 });
 
 test("native output cannot silently disappear in translated or incomplete streams", () => {

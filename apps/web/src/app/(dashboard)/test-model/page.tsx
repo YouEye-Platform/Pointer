@@ -172,6 +172,7 @@ export default function TestModelPage() {
     <div className="page-head">
       <p className="eyebrow">Direct configured-provider verification</p>
       <h1>Test Model</h1>
+      <p className="muted">Basic inference test: verifies one prompt on the selected account and model. Success does not establish worker compatibility with tools, history, reasoning replay or streaming tool calls. Worker conformance requires a separate protocol test.</p>
       <p className="muted">Search every model you can test, choose its exact provider route, or send the same prompt to two targets side by side.</p>
     </div>
 

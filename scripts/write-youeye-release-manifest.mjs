@@ -18,6 +18,6 @@ writeFileSync(resolve(output, "release-manifest.json"), `${JSON.stringify({
   sourceRepository,
   branch,
   commit,
-  runtime: { bun: "1.3.x (bundled)", postgresql: "17", schemaVersion: LATEST_POINTER_SCHEMA_VERSION },
-  entrypoints: { service: "server.js", migration: "migrate.js" },
+  runtime: { bun: "1.4.2 (bundled)", postgresql: "17", schemaVersion: LATEST_POINTER_SCHEMA_VERSION, engine: { package: "@bitkyc08/opencodex", version: "2.79.0" } },
+  entrypoints: { service: "server.js", migration: "migrate.js", managedIdentityTransition: "transition-managed-identity.js", providerStateImport: "import-provider-state.js", ui: "ui/manifest.json" },
 }, null, 2)}\n`);

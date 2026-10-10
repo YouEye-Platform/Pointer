@@ -1,3 +1,5 @@
+import { fetchCustomProviderEndpoint } from "../services/endpoint-fetch";
+import { validateProviderEndpoint } from "../services/custom-endpoint";
 import { providerAuthHeaders } from "./auth-headers";
 import type {
   ProviderManifest,
@@ -288,7 +290,14 @@ export async function fetchProviderModels(
   for (let page = 1; page <= maxPages; page += 1) {
     let response: Response;
     try {
-      response = await fetchImplementation(url, {
+      if (manifest.endpoint?.mode === "required") {
+        const destination = new URL(url);
+        const base = new URL(manifest.baseUrl);
+        if (destination.origin !== base.origin) throw new Error("Discovery escaped the account endpoint");
+        await validateProviderEndpoint(`${destination.origin}${destination.pathname}`);
+      }
+      response = await (manifest.endpoint?.mode === "required" && fetchImplementation === fetch ? fetchCustomProviderEndpoint : fetchImplementation)(url, {
+        redirect: "error",
         method: "GET",
         headers,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -351,5 +360,65 @@ export async function fetchProviderModels(
       )
     : models;
 
-  return deduplicateModels(manifest, eligible);
+  const unique = deduplicateModels(manifest, eligible);
+  return enrichProviderModelCapabilities(manifest, unique, credential, fetchImplementation);
+}
+
+/** Additive, bounded metadata GET. Unavailable discovery is unknown, never false. */
+export async function enrichProviderModelCapabilities(
+  manifest: ProviderManifest, models: UnknownRecord[], credential: string,
+  fetchImplementation: FetchImplementation = fetch,
+): Promise<UnknownRecord[]> {
+  const endpoint = manifest.models?.discovery?.capabilitiesEndpoint;
+  if (!endpoint) return models;
+  if (!endpoint.startsWith("/") || endpoint.startsWith("//") || endpoint.includes("?") || endpoint.includes("#")) {
+    throw new ProviderModelDiscoveryError(manifest.id, "has an invalid capability endpoint");
+  }
+  const base = new URL(manifest.baseUrl);
+  const url = new URL(`${manifest.baseUrl.replace(/\/$/, "")}${endpoint}`);
+  if (url.origin !== base.origin) throw new ProviderModelDiscoveryError(manifest.id, "capability discovery escaped the account endpoint");
+  let response: Response | undefined;
+  try {
+    if (manifest.endpoint?.mode === "required") await validateProviderEndpoint(`${url.origin}${url.pathname}`);
+    response = await (manifest.endpoint?.mode === "required" && fetchImplementation === fetch ? fetchCustomProviderEndpoint : fetchImplementation)(url, {
+      redirect: "error", method: "GET", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      headers: { ...(manifest.headers || {}), ...providerAuthHeaders(manifest, credential) },
+    });
+    if (!response.ok || !response.body) return models;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        size += next.value.length;
+        if (size > 1_048_576) { await reader.cancel(); return models; }
+        chunks.push(next.value);
+      }
+    } finally { reader.releaseLock(); }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    const rows = pageModels(manifest.id, JSON.parse(new TextDecoder().decode(bytes)), "data");
+    const index = new Map<string, UnknownRecord>();
+    for (const row of rows) {
+      if (isRecord(row) && typeof row.id === "string" && !index.has(row.id)) index.set(row.id, row);
+    }
+    const observedAt = new Date().toISOString();
+    return models.map(model => {
+      const id = discoveryValueAtPath(model, manifest.models?.discovery?.idField || "id");
+      const row = typeof id === "string" ? index.get(id) : undefined;
+      if (!row) return model;
+      // Only capability evidence is imported. A richer endpoint cannot replace
+      // routing identity, price, endpoint URL or an explicit primary denial.
+      return { ...model, capability_discovery: {
+        source: url.toString(), observedAt,
+        supports_tool_use: row.supports_tool_use, supportsTools: row.supportsTools, supports_tools: row.supports_tools,
+        capabilities: row.capabilities, supported_parameters: row.supported_parameters,
+        input_modalities: row.input_modalities, output_modalities: row.output_modalities,
+      } };
+    });
+  } catch { return models; }
+  finally { if (response?.body && !response.body.locked) await response.body.cancel().catch(() => {}); }
 }

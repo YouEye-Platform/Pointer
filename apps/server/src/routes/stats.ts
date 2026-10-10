@@ -1,3 +1,4 @@
+import {usageDiagnosticCoverage} from "../services/usage-telemetry";
 import { Hono } from "hono";
 import { and, eq, gte, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "../db";
@@ -31,17 +32,19 @@ async function modelUsageCondition(entityId: string): Promise<SQL> {
   )!;
 }
 
-async function aggregate(userId: string, since: Date, scope: SQL[] = []) {
-  const where = and(eq(schema.usageLogs.userId, userId), gte(schema.usageLogs.createdAt, since), ...scope);
+async function aggregate(userId: string, since: Date, scope: SQL[] = [], exactRequest = false) {
+  // Exact authorized receipt lookup survives idle retirement/Session archive
+  // without allowing an unbounded cross-owner history query.
+  const where = and(eq(schema.usageLogs.userId, userId), ...(exactRequest ? [] : [gte(schema.usageLogs.createdAt, since)]), ...scope);
   const [totals, daily, recent] = await Promise.all([
     db.select({
       requests: sql<number>`count(*)::int`,
       successful: sql<number>`count(*) filter (where ${schema.usageLogs.outcome} = 'success')::int`,
       knownCostSamples: sql<number>`count(${schema.usageLogs.costUsd})::int`,
       totalCost: sql<string | null>`sum(${schema.usageLogs.costUsd})`,
-      inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)::int`,
-      outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)::int`,
-      cachedTokens: sql<number>`coalesce(sum(coalesce(${schema.usageLogs.cachedTokens}, 0) + coalesce(${schema.usageLogs.cacheReadTokens}, 0)), 0)::int`,
+      inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)`.mapWith(Number),
+      outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)`.mapWith(Number),
+      cachedTokens: sql<number>`coalesce(sum(coalesce(${schema.usageLogs.cachedTokens}, 0)::bigint + coalesce(${schema.usageLogs.cacheReadTokens}, 0)::bigint), 0)`.mapWith(Number),
       latencySamples: sql<number>`count(${schema.usageLogs.latencyMs})::int`,
       latencyP50: sql<number | null>`percentile_cont(.5) within group (order by ${schema.usageLogs.latencyMs}) filter (where ${schema.usageLogs.latencyMs} is not null)`,
       latencyP95: sql<number | null>`percentile_cont(.95) within group (order by ${schema.usageLogs.latencyMs}) filter (where ${schema.usageLogs.latencyMs} is not null)`,
@@ -60,8 +63,8 @@ async function aggregate(userId: string, since: Date, scope: SQL[] = []) {
       requests: sql<number>`count(*)::int`,
       successful: sql<number>`count(*) filter (where ${schema.usageLogs.outcome} = 'success')::int`,
       cost: sql<string | null>`sum(${schema.usageLogs.costUsd})`,
-      inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)::int`,
-      outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)::int`,
+      inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)`.mapWith(Number),
+      outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)`.mapWith(Number),
     }).from(schema.usageLogs).where(where)
       .groupBy(sql`date_trunc('day', ${schema.usageLogs.createdAt})::date`)
       .orderBy(sql`date_trunc('day', ${schema.usageLogs.createdAt})::date`),
@@ -73,6 +76,8 @@ async function aggregate(userId: string, since: Date, scope: SQL[] = []) {
       inputTokens: schema.usageLogs.inputTokens, outputTokens: schema.usageLogs.outputTokens,
       costUsd: schema.usageLogs.costUsd, latencyMs: schema.usageLogs.latencyMs,
       ttfbMs: schema.usageLogs.ttfbMs, tokensPerSecond: schema.usageLogs.tokensPerSecond,
+      requestId: schema.usageLogs.requestId, upstreamErrorCode: schema.usageLogs.upstreamErrorCode,
+      failureReceipt: schema.usageLogs.failureReceipt,
       createdAt: schema.usageLogs.createdAt,
     }).from(schema.usageLogs).where(where).orderBy(sql`${schema.usageLogs.createdAt} desc`).limit(50),
   ]);
@@ -80,7 +85,8 @@ async function aggregate(userId: string, since: Date, scope: SQL[] = []) {
   const row = totals[0];
   const requests = row?.requests || 0;
   return {
-    period: { since: since.toISOString() },
+    diagnosticCoverage: usageDiagnosticCoverage(userId),
+    period: { since: exactRequest ? null : since.toISOString(), ...(exactRequest ? {scope:"exact_request"} : {}) },
     sample: { requests, confidence: confidence(requests) },
     totals: {
       requests, successful: row?.successful || 0, errors: row?.errors || 0,
@@ -102,7 +108,7 @@ app.get("/summary", async (c) => {
   const user = c.get("user");
   const filters = await usageFilters(c, user.id);
   if ("error" in filters) return c.json({ error: filters.error }, 404);
-  return c.json({ days: selected.days, filters: filters.values, ...(await aggregate(user.id, selected.since, filters.conditions)) });
+  return c.json({ days: selected.days, filters: filters.values, ...(await aggregate(user.id, selected.since, filters.conditions, !!filters.values.request)) });
 });
 
 async function usageFilters(c: any, userId: string): Promise<{ conditions: SQL[]; values: Record<string, string> } | { error: string }> {
@@ -114,6 +120,7 @@ async function usageFilters(c: any, userId: string): Promise<{ conditions: SQL[]
     conditions.push(await modelUsageCondition(model));
   }
   const mappings = [
+    ["request", schema.usageLogs.requestId],
     ["source", schema.usageLogs.source], ["provider", schema.usageLogs.providerId],
     ["account", schema.usageLogs.providerAccountId],
     ["instance", schema.usageLogs.instanceId], ["key", schema.usageLogs.apiKeyId], ["outcome", schema.usageLogs.outcome],
@@ -152,8 +159,8 @@ app.get("/breakdown", async (c) => {
     id: column,
     requests: sql<number>`count(*)::int`,
     successful: sql<number>`count(*) filter (where ${schema.usageLogs.outcome} = 'success')::int`,
-    inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)::int`,
-    outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)::int`,
+    inputTokens: sql<number>`coalesce(sum(${schema.usageLogs.inputTokens}), 0)`.mapWith(Number),
+    outputTokens: sql<number>`coalesce(sum(${schema.usageLogs.outputTokens}), 0)`.mapWith(Number),
     totalCost: sql<string | null>`sum(${schema.usageLogs.costUsd})`,
     avgLatency: sql<number | null>`avg(${schema.usageLogs.latencyMs})`,
     avgTtfb: sql<number | null>`avg(${schema.usageLogs.ttfbMs})`,

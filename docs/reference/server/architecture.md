@@ -142,3 +142,14 @@ See [managed-platform.md](./managed-platform.md) for the lifecycle and
 ## Pre-release replacement policy
 
 There is no runtime compatibility layer for superseded catalog or gateway implementations. Database changes remain additive where necessary to preserve production data, but old views, engine switches, translators, and routes are removed once their V1 replacements are verified.
+
+## OpenCode Go connection checks
+
+Go inventory is public and cannot verify a subscription key. Explicit Connection
+Test performs one bounded coding inference request on the selected account,
+using a verified paid model and its native protocol. It sends Pointer's user
+agent and a unique stable probe conversation ID. Free-only catalogues, malformed
+responses and rejected inference never report successful authentication. Errors
+identify key rejection, subscription denial or quota/rate limits without
+reflecting upstream response bodies. The UI explains that the Console API key
+provides subscription access and that testing uses the Go allowance.

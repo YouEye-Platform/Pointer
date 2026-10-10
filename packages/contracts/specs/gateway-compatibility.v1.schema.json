@@ -386,7 +386,9 @@
       "type": "string",
       "enum": [
         "pointer_invalid_request", "pointer_feature_lossy", "pointer_feature_unsupported",
-        "pointer_feature_unknown", "pointer_no_compatible_target", "pointer_upstream_auth",
+        "pointer_feature_unknown", "pointer_no_compatible_target", "pointer_upstream_rejected",
+        "pointer_upstream_not_found",
+        "pointer_upstream_auth",
         "pointer_upstream_rate_limit", "pointer_upstream_timeout", "pointer_upstream_unavailable", "pointer_context_length_exceeded", "pointer_empty_response",
         "pointer_connect_timeout", "pointer_first_token_timeout", "pointer_idle_timeout",
         "pointer_total_timeout", "pointer_client_cancelled", "pointer_malformed_stream",

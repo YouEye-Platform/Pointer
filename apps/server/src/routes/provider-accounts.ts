@@ -1,3 +1,6 @@
+import { invalidateModelResolutionCache } from "../services/model-resolution";
+import { persistedToolCapability, toolCapability, toolCapabilityValue, modelCapabilityOverridesSchema } from "../gateway/tool-capability";
+import { wireCapabilityOverridesSchema } from "../gateway/wire-capabilities";
 import { Hono } from "hono";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -21,6 +24,8 @@ const createSchema = z.object({
   nickname: z.string().trim().min(1).max(100).nullable().optional(),
   apiKey: z.string().min(1).max(20_000),
   baseUrl: z.string().trim().max(2_000).optional(),
+  wireCapabilities: wireCapabilityOverridesSchema.optional(),
+  capabilityOverrides: modelCapabilityOverridesSchema.optional(),
 }).strict();
 
 const updateSchema = z.object({
@@ -28,6 +33,8 @@ const updateSchema = z.object({
   apiKey: z.string().min(1).max(20_000).optional(),
   baseUrl: z.string().trim().max(2_000).nullable().optional(),
   status: z.enum(["active", "disabled"]).optional(),
+  wireCapabilities: wireCapabilityOverridesSchema.optional(),
+  capabilityOverrides: modelCapabilityOverridesSchema.optional(),
 }).strict();
 
 async function ownedAccount(id: string, userId: string) {
@@ -44,6 +51,8 @@ app.get("/", async (c) => {
     providerId: schema.providerAccounts.providerId,
     nickname: schema.providerAccounts.nickname,
     baseUrl: schema.providerAccounts.baseUrl,
+    wireCapabilities: schema.providerAccounts.wireCapabilities,
+    capabilityOverrides: schema.providerAccounts.capabilityOverrides,
     status: schema.providerAccounts.status,
     createdAt: schema.providerAccounts.createdAt,
     updatedAt: schema.providerAccounts.updatedAt,
@@ -52,7 +61,8 @@ app.get("/", async (c) => {
     authType: schema.providers.authType,
     isBuiltin: schema.providers.isBuiltin,
     manifestPath: schema.providers.manifestPath,
-    credentialConfigured: sql<boolean>`${schema.providerKeys.id} is not null`,
+    engineProvider: schema.providerAccounts.engineProvider,
+    credentialConfigured: sql<boolean>`(${schema.providerKeys.id} is not null or ${schema.providerAccounts.engineProvider} is not null)`,
   }).from(schema.providerAccounts)
     .innerJoin(schema.providers, eq(schema.providers.id, schema.providerAccounts.providerId))
     .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
@@ -96,6 +106,9 @@ app.get("/:id", async (c) => {
       inputPrice: schema.providerModels.inputPrice,
       outputPrice: schema.providerModels.outputPrice,
       supportsTools: schema.providerModels.supportsTools,
+      rawMetadata: schema.providerAccountModels.rawMetadata,
+      legacyMetadata: schema.providerModels.rawMetadata,
+      discoveredAt: schema.providerAccountModels.discoveredAt,
       supportsVision: schema.providerModels.supportsVision,
       supportsStreaming: schema.providerModels.supportsStreaming,
     }).from(schema.providerAccountModels)
@@ -111,6 +124,7 @@ app.get("/:id", async (c) => {
   const endpoint = manifest?.endpoint ?? { mode: "fixed" as const };
   return c.json({
     ...account,
+    authType: provider.authType,
     nickname: account.nickname ?? null,
     displayName: account.nickname || `${provider.name} · ${account.id.slice(-6)}`,
     baseUrl: endpoint.mode === "required" ? account.baseUrl : null,
@@ -126,7 +140,13 @@ app.get("/:id", async (c) => {
       return parsed.kind === "oauth2" ? credentialStatus(parsed.value)
         : { status: parsed.kind === "api-key" ? "connected" : "reconnect_required", refreshable: false };
     })() : { status: "not_connected", refreshable: false },
-    models,
+    models: models.map(({ rawMetadata, legacyMetadata, discoveredAt, ...model }) => {
+      const fallback = manifest?.models?.capabilityFallbacks?.find(row => row.modelId.toLowerCase() === model.rawModelId.toLowerCase())?.supportsTools;
+      const evidence = typeof account.capabilityOverrides.tools === "boolean"
+        ? toolCapability(account.capabilityOverrides.tools, "endpoint.override", account.updatedAt.toISOString())
+        : persistedToolCapability(rawMetadata ?? legacyMetadata, rawMetadata != null ? null : model.supportsTools, fallback, discoveredAt?.toISOString() ?? null);
+      return { ...model, supportsTools: toolCapabilityValue(evidence), capabilityEvidence: { tools: evidence } };
+    }),
   });
 });
 
@@ -156,7 +176,7 @@ app.post("/", async (c) => {
     await db.transaction(async (tx) => {
       await tx.insert(schema.providerAccounts).values({
         id, userId: user.id, providerId: body.data.providerId,
-        nickname: body.data.nickname ?? null, baseUrl,
+        nickname: body.data.nickname ?? null, baseUrl, wireCapabilities: body.data.wireCapabilities ?? {}, capabilityOverrides: body.data.capabilityOverrides ?? {},
       });
       await tx.insert(schema.providerKeys).values({
         id: nanoid(), userId: user.id, providerId: body.data.providerId,
@@ -180,6 +200,8 @@ app.put("/:id", async (c) => {
   const account = await ownedAccount(c.req.param("id"), user.id);
   if (!account) return c.json({ error: "Account not found", code: "account_not_found" }, 404);
   const updates: Partial<typeof schema.providerAccounts.$inferInsert> = { updatedAt: new Date() };
+  if (body.data.capabilityOverrides !== undefined) updates.capabilityOverrides = body.data.capabilityOverrides;
+  if (body.data.wireCapabilities !== undefined) updates.wireCapabilities = body.data.wireCapabilities;
   if (body.data.nickname !== undefined) updates.nickname = body.data.nickname;
   if (body.data.status !== undefined) updates.status = body.data.status;
   if (body.data.baseUrl !== undefined) {
@@ -224,6 +246,7 @@ app.put("/:id", async (c) => {
     if (value.includes("23505")) return c.json({ error: "Account nickname already exists", code: "nickname_conflict" }, 409);
     throw error;
   }
+  invalidateModelResolutionCache();
   return c.json({ updated: true });
 });
 
@@ -254,6 +277,10 @@ app.post("/:id/test", async (c) => {
   ]);
   if (!resolved || !apiKey) return c.json({ success: false, error: "Credential unavailable" }, 400);
   try {
+    if (resolved.handler?.testConnection) {
+      const result=await resolved.handler.testConnection(resolved.manifest,apiKey,await registry.getProviderOAuthCredential(account.providerId,user.id,account.id) || undefined);
+      return c.json(result,result.success ? 200 : 400);
+    }
     const models = resolved.handler?.fetchModels
       ? await resolved.handler.fetchModels(resolved.manifest, apiKey)
       : await fetchProviderModels(resolved.manifest, apiKey);

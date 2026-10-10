@@ -104,6 +104,7 @@ export function finding(
 }
 
 const BEST_EFFORT_DETAIL_CODES = new Set([
+  "pointer_custom_grammar_prompted",
   "pointer_chat_cache_creation_usage_dropped",
   "pointer_chat_cache_control_dropped",
   "pointer_chat_annotations_dropped",

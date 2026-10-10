@@ -9,6 +9,7 @@ import {
 import type { NormalizedBenchmarkRecord, NormalizedReferenceModel, SourceProvenance } from "./sources/types";
 
 export interface ProviderModelInput {
+  engineInventory?: boolean;
   id: string;
   providerId: string;
   providerName: string;

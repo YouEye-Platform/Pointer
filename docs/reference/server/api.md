@@ -186,9 +186,14 @@ credential for the same provider.
 | GET | `/v1beta/models/{model}` | One Google model resource. |
 | POST | `/v1beta/models/{model}:generateContent` | Google GenerateContent JSON. |
 | POST | `/v1beta/models/{model}:streamGenerateContent?alt=sse` | Google GenerateContent SSE. |
-| POST | `/v1beta/models/{model}:countTokens` | Exact native count or labeled estimate. |
-| POST | `/v1beta/models/{model}:embedContent` | Native Google embedding operation. |
-| POST | `/v1beta/models/{model}:batchEmbedContents` | Native Google batch embedding operation. |
+| POST | `/v1beta/models/{model}:countTokens` | Estimate, labeled by `x-pointer-token-count-source: estimated`. |
+
+The pinned OpenCodex engine advertises these three generation/count methods.
+`embedContent` and `batchEmbedContents` return `404 NOT_FOUND`; this runtime
+does not provide native embeddings or exact native token counts. Inputs that
+cannot be represented by the engine return `400 INVALID_ARGUMENT`. Support for
+text, streaming and function calls does not imply full Google multimodal support.
+See [OpenCodex engine](../../opencodex-engine.md) for the runtime boundary.
 
 The `model` field normally uses a **display name** from `GET /v1/models` (case-insensitive and
 trimmed). The hidden group role aliases documented above are also valid even though discovery never

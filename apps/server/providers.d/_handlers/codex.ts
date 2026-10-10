@@ -15,12 +15,13 @@ import { jsonObjectSchema } from "../../src/gateway/protocol/v1/schemas";
 import { stableGatewayId } from "../../src/gateway/protocol/v1/common";
 import { nanoid } from "nanoid";
 import { buildProviderGatewayOperationUrl } from "../../src/gateway/provider-operation";
+import { wireCapabilityOverridesSchema } from "../../src/gateway/wire-capabilities";
 
 const MODELS_CATALOG_URL =
   "https://raw.githubusercontent.com/openai/codex/main/codex-rs/models-manager/models.json";
-// The backend treats 0.0.0 as an unversioned client. Using Pointer's package
-// version incorrectly applies Codex CLI rollout filters and can hide all models.
-const CODEX_CLIENT_VERSION = "0.0.0";
+// Codex discovery is gated by the native client version, including 0.0.0.
+// Keep this compatibility version current; Pointer's own version is unrelated.
+const CODEX_CLIENT_VERSION = "0.159.2";
 const DEFAULT_DEVICE_EXPIRES_SECONDS = 15 * 60;
 const DEFAULT_DEVICE_POLL_SECONDS = 5;
 
@@ -245,12 +246,20 @@ function toStaticModel(model: JsonObject): StaticModel | null {
   if (!id || model.visibility === "hidden") return null;
   const contextWindow = numberField(model.context_window) ?? numberField(model.max_context_window);
   const inputModalities = arrayField(model.input_modalities);
+  const declaredReasoning = arrayField(model.supported_reasoning_levels);
+  const reasoningEfforts = [...new Set(declaredReasoning?.flatMap(level => {
+    const effort = typeof level === "string" ? level : stringField(asObject(level)?.effort);
+    const parsed = wireCapabilityOverridesSchema.safeParse({ reasoningEfforts: [effort] });
+    return parsed.success ? parsed.data.reasoningEfforts ?? [] : [];
+  }) ?? [])];
   return {
     id,
     name: stringField(model.display_name) ?? stringField(model.name) ?? id,
     ...(contextWindow !== undefined ? { contextWindow } : {}),
     supportsTools: booleanField(model.supports_parallel_tool_calls) ?? false,
     supportsVision: inputModalities?.includes("image") ?? false,
+    ...(declaredReasoning ? { supportsReasoning: reasoningEfforts.length > 0 } : {}),
+    ...(reasoningEfforts.length ? { wireCapabilities: { reasoningEfforts } } : {}),
   };
 }
 

@@ -422,7 +422,8 @@ describe("built-in provider discovery contracts", () => {
       candidate,
     ]));
 
-    expect(manifests).toHaveLength(19);
+    expect(manifests).toHaveLength(20);
+    expect(byId.get("opencode-go")).toMatchObject({handler:"opencode-go",baseUrl:"https://opencode.ai/zen/go/v1"});
     for (const id of [
       "custom-openai-compatible",
       "custom-anthropic-compatible",
@@ -484,4 +485,29 @@ describe("built-in provider discovery contracts", () => {
       );
     }
   });
+});
+
+test("optional richer discovery merges only matching capability evidence and preserves primary metadata", async () => {
+  const provider = manifest();
+  provider.models!.discovery!.capabilitiesEndpoint = "/models/capabilities";
+  const calls: Array<{url:string;init?:RequestInit}> = [];
+  const models = await fetchProviderModels(provider, "fixture-key", mockFetch([
+    {body:{data:[{id:"a",supportsTools:false},{id:"b"}]}},
+    {body:{data:[{id:"a",capabilities:["tools"],nativeEndpoint:"/wrong"},{id:"b",capabilities:["chat","tools"]},{id:"other",capabilities:["tools"]}]}},
+  ], calls));
+  expect(models).toHaveLength(2);
+  expect(models[0].supportsTools).toBe(false);
+  expect(models[0].nativeEndpoint).toBeUndefined();
+  expect(models[1].capability_discovery).toMatchObject({capabilities:["chat","tools"],source:"https://inference.example.test/v1/models/capabilities"});
+  expect(calls[1].init?.redirect).toBe("error");
+  expect(calls[1].init?.method).toBe("GET");
+});
+
+test("missing or malformed additive capability API leaves discovery unknown", async () => {
+  const provider = manifest();
+  provider.models!.discovery!.capabilitiesEndpoint = "/models/capabilities";
+  for (const supplemental of [{status:404,body:{}},{body:{data:"bad"}},{status:302,body:{}}]) {
+    const calls: Array<{url:string;init?:RequestInit}> = [];
+    expect(await fetchProviderModels(provider,"fixture-key",mockFetch([{body:{data:[{id:"a"}]}},supplemental],calls))).toEqual([{id:"a"}]);
+  }
 });

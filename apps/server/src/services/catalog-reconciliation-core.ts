@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { modelLabel } from "@pointer/contracts/model-label";
 import {
   CATALOG_IDENTITY_RESOLVER_VERSION,
   parseIdentityClaims,
@@ -53,6 +54,7 @@ export const benchmarkObservationPayloadSchema = z.object({
 });
 
 export const providerObservationPayloadSchema = z.object({
+  engineInventory: z.boolean().optional(),
   id: z.string().min(1),
   providerId: z.string().min(1),
   providerName: z.string().min(1),
@@ -551,7 +553,9 @@ function selectCanonicalName(input: {
   const selectedName = reviewed
     ? (reviewedPrefix ? reviewed.slice(reviewed.indexOf(":") + 1).trim() : reviewed)
     : selected
-      ? formatSourceDisplayName(selected.selectedValue)
+      ? selected.selectedValue === localRouteLabel(selected.observation.nativeId)
+        ? modelLabel({ id: selected.selectedValue })
+        : formatSourceDisplayName(selected.selectedValue)
       : localRouteLabel(input.entity.claims.rawNativeId);
   const provenance: CatalogNameProvenance = reviewed ? {
     sourceId: null,
@@ -702,7 +706,7 @@ export function buildCatalogGenerationPlan(input: {
 
   const resolved = resolveCatalogIdentities({
     observations: identityObservations,
-    existingEntities: (input.existingEntities ?? []).filter((entity) => entity.preferredName).map((entity) => ({
+    existingEntities: (input.existingEntities ?? []).filter((entity) => entity.preferredName && !entity.id.startsWith("route/")).map((entity) => ({
       id: entity.id,
       stableSlug: entity.stableSlug,
       preferredName: entity.preferredName!,
@@ -721,6 +725,21 @@ export function buildCatalogGenerationPlan(input: {
     priorLinks: input.previousLinks,
   });
   const observationsById = new Map(input.observations.map((item) => [item.id, item]));
+  // A routable engine model need not have enough evidence for a shared canonical
+  // identity. Keep it as an exact provider route, without inventing its creator
+  // or merging unrelated providers' identically named experimental models.
+  for (const link of resolved.decisions) {
+    const provider = providers.get(link.observationId);
+    if (!provider?.engineInventory || !["unresolved", "ambiguous"].includes(link.state)) continue;
+    const observation = observationsById.get(link.observationId)!;
+    const id = `route/${provider.id}`;
+    if (input.rejectedEntityIds?.[link.observationId]?.includes(id)) continue;
+    const claims = parseIdentityClaims({ nativeId: provider.rawModelId, observedName: observation.rawName });
+    resolved.entities.push({ id, stableSlug: id.replaceAll("/", "--"), preferredName: observation.rawName || provider.rawModelId,
+      organizationId: null, claims: { ...claims, creator: null, namespace: null, identityKey: id } });
+    Object.assign(link, { entityId: id, state: "linked", method: "native_id", confidence: 1,
+      candidateEntityIds: [id], evidence: [...link.evidence, "exact-provider-route-only;canonical-identity-unresolved"] });
+  }
   const snapshotsById = new Map(input.snapshots.map((item) => [item.id, item]));
   const stableSlugByEntity = stableSlugs(resolved.entities, input.existingEntities ?? []);
   const existingOrganizationById = new Map((input.existingOrganizations ?? []).map((organization) => [organization.id, organization]));

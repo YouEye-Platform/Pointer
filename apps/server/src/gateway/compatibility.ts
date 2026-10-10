@@ -315,6 +315,8 @@ export const compatibilityErrorCodeSchema = z.enum([
   "pointer_feature_unsupported",
   "pointer_feature_unknown",
   "pointer_no_compatible_target",
+  "pointer_upstream_rejected",
+  "pointer_upstream_not_found",
   "pointer_upstream_auth",
   "pointer_upstream_rate_limit",
   "pointer_upstream_timeout",
@@ -970,6 +972,8 @@ export function errorCodeForUpstreamStatus(
   if (upstreamStatus === 408 || upstreamStatus === 504) {
     return "pointer_upstream_timeout";
   }
+  if (upstreamStatus === 400 || upstreamStatus === 422) return "pointer_upstream_rejected";
+  if (upstreamStatus === 404 || upstreamStatus === 405) return "pointer_upstream_not_found";
   if (upstreamStatus === 429) return "pointer_upstream_rate_limit";
   if (upstreamStatus === 401 || upstreamStatus === 403) {
     return "pointer_upstream_auth";

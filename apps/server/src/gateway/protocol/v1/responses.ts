@@ -1,4 +1,5 @@
-import { nativeResponseItem, nativeResponseBlock, responseItemFromBlock } from "./responses-native";
+import { semanticResponseTools, resolveToolCatalog, emitResponseTools } from "./tool-codec";
+import { RESPONSES_RESPONSE_METADATA_KEYS, nativeResponseItem, nativeResponseBlock, responseItemFromBlock } from "./responses-native";
 import {
   GATEWAY_IR_NAME,
   GATEWAY_IR_VERSION,
@@ -85,36 +86,7 @@ const MODELED_RESPONSE_KEYS = new Set([
   "output",
   "usage",
 ]);
-const PRESERVED_RESPONSE_KEYS = new Set([
-  "background",
-  "completed_at",
-  "error",
-  "frequency_penalty",
-  "incomplete_details",
-  "instructions",
-  "max_output_tokens",
-  "max_tool_calls",
-  "metadata",
-  "moderation",
-  "parallel_tool_calls",
-  "presence_penalty",
-  "previous_response_id",
-  "prompt_cache_key",
-  "prompt_cache_retention",
-  "reasoning",
-  "safety_identifier",
-  "service_tier",
-  "store",
-  "temperature",
-  "text",
-  "tool_choice",
-  "tool_usage",
-  "tools",
-  "top_logprobs",
-  "top_p",
-  "truncation",
-  "user",
-]);
+const PRESERVED_RESPONSE_KEYS = RESPONSES_RESPONSE_METADATA_KEYS;
 
 function responseContentBlocks(
   value: unknown,
@@ -202,6 +174,36 @@ function parseInput(
       turns.push({ role, blocks: responseContentBlocks(raw.content, `input.${index}.content`, findings) });
       continue;
     }
+    if (raw.type === "additional_tools" || raw.type === "tool_search_output") {
+      if (!Array.isArray(raw.tools) || !raw.tools.every(isRecord)) {
+        findings.push(finding(FORMAT, `input.${index}.tools`, "unsupported", "pointer_tool_definition_invalid", "Invalid deferred tools.")); continue;
+      }
+      turns.push({ role: "assistant", blocks: [{ type: "tool_declaration", source: raw.type,
+        tools: raw.tools as JsonObject[], wireMetadata: Object.fromEntries(Object.entries(raw).filter(([key]) => !["type", "tools", "id", "call_id", "role"].includes(key))) as JsonObject, ...(typeof raw.id === "string" ? { id: raw.id } : {}),
+        ...(typeof raw.call_id === "string" ? { callId: raw.call_id } : {}),
+        ...(raw.role === "system" || raw.role === "developer" ? { role: raw.role } : {}) }] });
+      continue;
+    }
+    if (raw.type === "custom_tool_call" && typeof raw.name === "string" && typeof raw.input === "string" && typeof raw.call_id === "string") {
+      turns.push({ role: "assistant", blocks: [{ type: "tool_call", id: raw.call_id, name: raw.name,
+        arguments: { input: raw.input }, rawArguments: JSON.stringify({ input: raw.input }), inputKind: "text",
+        ...(typeof raw.namespace === "string" ? { namespace: raw.namespace } : {}),
+        ...(typeof raw.id === "string" ? { itemId: raw.id } : {}) }] });
+      continue;
+    }
+    if (raw.type === "custom_tool_call_output" && typeof raw.call_id === "string") {
+      turns.push({ role: "tool", blocks: [{ type: "tool_result", callId: raw.call_id,
+        output: asJsonValue(raw.output) ?? "", isError: false, inputKind: "text",
+        ...(typeof raw.id === "string" ? { id: raw.id } : {}) }] });
+      continue;
+    }
+    if (raw.type === "tool_search_call" && raw.execution === "client" && typeof raw.call_id === "string") {
+      const args = asJsonValue(raw.arguments);
+      if (args === undefined) { findings.push(finding(FORMAT, "input", "unsupported", "pointer_tool_search_invalid", "Invalid client tool-search call.")); continue; }
+      const block: IrContentBlock = {type:"tool_call",id:raw.call_id,name:"tool_search",arguments:args,toolKind:"tool_search",providerMetadata:Object.fromEntries(Object.entries(raw).filter(([key])=>!["type","call_id","arguments","id"].includes(key))) as JsonObject,...(typeof raw.id === "string" ? {itemId:raw.id} : {})};
+      turns.push({role:"assistant",blocks:[block]});
+      continue;
+    }
     const native = nativeResponseItem(raw);
     if (native) {
       adjacentToolCallId = undefined;
@@ -222,6 +224,7 @@ function parseInput(
           type: "tool_call",
           id: callId,
           name: raw.name,
+          ...(typeof raw.namespace === "string" ? { namespace: raw.namespace } : {}),
           arguments: parseJsonValue(rawArguments),
           rawArguments,
           ...(typeof raw.id === "string" ? { itemId: raw.id } : {}),
@@ -262,6 +265,7 @@ function parseInput(
         blocks: [{
           type: "reasoning",
           text: summary,
+          ...(Array.isArray(raw.summary) ? { summary: raw.summary } : {}),
           ...(typeof raw.id === "string" ? { id: raw.id } : {}),
           ...(typeof raw.encrypted_content === "string"
             ? { encryptedContent: raw.encrypted_content }
@@ -277,42 +281,8 @@ function parseInput(
 }
 
 function parseTools(value: unknown, findings: IrCompatibilityFinding[]): IrTool[] {
-  if (!Array.isArray(value)) return [];
-  const tools: IrTool[] = [];
-  for (const [index, raw] of value.entries()) {
-    if (!isRecord(raw) || typeof raw.type !== "string") {
-      findings.push(finding(FORMAT, `tools.${index}`, "unsupported", "pointer_tool_definition_invalid", "Responses tool definitions require type."));
-      continue;
-    }
-    if (raw.type === "function" && typeof raw.name === "string") {
-      const parameters = asJsonObject(raw.parameters);
-      if (raw.parameters !== undefined && parameters === null) {
-        findings.push(finding(
-          FORMAT,
-          `tools.${index}.parameters`,
-          "unsupported",
-          "pointer_responses_function_parameters_invalid",
-          "Responses function parameters must be a JSON object.",
-        ));
-      }
-      tools.push({
-        type: "function",
-        name: raw.name,
-        ...(typeof raw.description === "string" ? { description: raw.description } : {}),
-        parameters: parameters ?? {},
-        ...(typeof raw.strict === "boolean" ? { strict: raw.strict } : {}),
-      });
-      continue;
-    }
-    const configuration: JsonObject = {};
-    for (const [key, child] of Object.entries(raw)) {
-      if (key === "type") continue;
-      const json = asJsonValue(child);
-      if (json !== null || child === null) configuration[key] = json;
-    }
-    tools.push({ type: "builtin", name: raw.type, configuration });
-  }
-  return tools;
+  try { return semanticResponseTools(value); }
+  catch { findings.push(finding(FORMAT, "tools", "unsupported", "pointer_tool_definition_invalid", "Invalid tool declaration or namespace.")); return []; }
 }
 
 function repairInvalidFunctionParameters(input: unknown): {
@@ -363,7 +333,12 @@ export function parseResponsesRequest(
   const parsed = responsesRequestSchema.safeParse(repaired.input);
   if (!parsed.success) return invalidPayloadFailure(FORMAT, zodIssues(parsed.error));
   const findings: IrCompatibilityFinding[] = [...repaired.findings];
-  const toolChoice = parseToolChoice(FORMAT, parsed.data.tool_choice);
+  const rawChoice: Record<string, unknown> | undefined = isRecord(parsed.data.tool_choice) ? parsed.data.tool_choice : undefined;
+  const toolChoice = parseToolChoice(FORMAT, rawChoice?.type === "custom" ? { ...rawChoice, type: "function" } : parsed.data.tool_choice);
+  if (toolChoice.choice?.type === "function" && rawChoice) {
+    if (typeof rawChoice.namespace === "string") toolChoice.choice.namespace = rawChoice.namespace;
+    if (rawChoice.type === "custom") toolChoice.choice.inputKind = "text";
+  }
   findings.push(...toolChoice.findings);
   const collected = collectExtensions(parsed.data, {
     sourceFormat: FORMAT,
@@ -380,7 +355,7 @@ export function parseResponsesRequest(
   if (reasoning?.context !== undefined) {
     collected.extensions.push({ namespace: FORMAT, key: "reasoning", value: { context: reasoning.context } });
   }
-  const allowedEfforts = ["none", "minimal", "low", "medium", "high", "xhigh"] as const;
+  const allowedEfforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] as const;
   const allowedSummaries = ["auto", "concise", "detailed", "none"] as const;
   const effort = reasoning && allowedEfforts.includes(reasoning.effort as typeof allowedEfforts[number])
     ? reasoning.effort as typeof allowedEfforts[number]
@@ -409,6 +384,12 @@ export function parseResponsesRequest(
       "Responses reasoning summary is not supported.",
     ));
   }
+  const turns = parseInput(parsed.data.input, findings);
+  let tools = parseTools(parsed.data.tools, findings);
+  try {
+    tools = resolveToolCatalog(tools, turns.flatMap(turn => turn.blocks.flatMap(block =>
+      block.type === "tool_declaration" ? [semanticResponseTools(block.tools, "deferred")] : [])));
+  } catch { findings.push(finding(FORMAT, "tools", "unsupported", "pointer_tool_declaration_conflict", "Conflicting or invalid tool declarations.")); }
   const request = irRequestSchema.parse({
     protocol: GATEWAY_IR_NAME,
     version: GATEWAY_IR_VERSION,
@@ -420,8 +401,8 @@ export function parseResponsesRequest(
     model: parsed.data.model,
     stream: parsed.data.stream ?? false,
     instructions: parseInstructions(parsed.data.instructions, findings),
-    turns: parseInput(parsed.data.input, findings),
-    tools: parseTools(parsed.data.tools, findings),
+    turns,
+    tools,
     ...(toolChoice.choice ? { toolChoice: toolChoice.choice } : {}),
     ...(optionalBoolean(parsed.data.parallel_tool_calls) !== undefined ? { parallelToolCalls: parsed.data.parallel_tool_calls } : {}),
     ...(reasoning ? { reasoning: { enabled: effort !== "none", ...(effort ? { effort } : {}), ...(summary ? { summary } : {}) } } : {}),
@@ -504,18 +485,25 @@ function emitInputItems(
       if (native) {
         flush();
         items.push(native);
+      } else if (block.type === "tool_declaration") {
+        flush(); items.push({ ...block.wireMetadata, type: block.source, tools: block.tools,
+          ...(block.id ? { id: block.id } : {}), ...(block.callId ? { call_id: block.callId } : {}),
+          ...(block.role ? { role: block.role } : {}) });
       } else if (block.type === "tool_call") {
         flush();
-        items.push({ type: "function_call", ...(block.itemId ? { id: block.itemId } : {}), call_id: block.id, name: block.name, arguments: block.rawArguments ?? stringifyJsonValue(block.arguments) });
+        if (block.toolKind === "tool_search") { items.push({...block.providerMetadata,type:"tool_search_call",call_id:block.id,arguments:block.arguments,...(block.itemId ? {id:block.itemId} : {})}); continue; }
+        items.push({ type: block.inputKind === "text" ? "custom_tool_call" : "function_call", ...(block.itemId ? { id: block.itemId } : {}), call_id: block.id, name: block.name,
+          ...(block.namespace ? { namespace: block.namespace } : {}),
+          ...(block.inputKind === "text" ? { input: isRecord(block.arguments) ? String(block.arguments.input ?? "") : String(block.arguments) } : { arguments: block.rawArguments ?? stringifyJsonValue(block.arguments) }) });
       } else if (block.type === "tool_result") {
         flush();
         items.push({
-          type: "function_call_output",
+          type: block.inputKind === "text" ? "custom_tool_call_output" : "function_call_output",
           ...(block.id ? { id: block.id } : {}),
           call_id: block.callId,
           output: block.isError
             ? JSON.stringify({ error: block.output })
-            : stringifyJsonValue(block.output),
+            : block.inputKind === "text" ? block.output : stringifyJsonValue(block.output),
         });
       } else if (block.type === "reasoning") {
         flush();
@@ -529,7 +517,7 @@ function emitInputItems(
             FORMAT,
           ));
         }
-        items.push({ type: "reasoning", ...(block.id ? { id: block.id } : {}), summary: [{ type: "summary_text", text: block.text }], ...(block.encryptedContent !== undefined ? { encrypted_content: block.encryptedContent } : {}) });
+        items.push({ type: "reasoning", ...(block.id ? { id: block.id } : {}), summary: block.summary ?? [{ type: "summary_text", text: block.text }], ...(block.encryptedContent !== undefined ? { encrypted_content: block.encryptedContent } : {}) });
       } else {
         const content = emitResponseContent(block, turn.role, path, sourceFormat, findings);
         if (content) pending.push(content);
@@ -577,8 +565,8 @@ export function renderResponsesRequest(
     ...(request.sampling.maxOutputTokens !== undefined ? { max_output_tokens: request.sampling.maxOutputTokens } : {}),
     ...(request.sampling.temperature !== undefined ? { temperature: request.sampling.temperature } : {}),
     ...(request.sampling.topP !== undefined ? { top_p: request.sampling.topP } : {}),
-    ...(request.tools.length > 0 ? { tools: request.tools.map((tool) => tool.type === "function" ? { type: "function", name: tool.name, ...(tool.description !== undefined ? { description: tool.description } : {}), parameters: tool.parameters, ...(tool.strict !== undefined ? { strict: tool.strict } : {}) } : { type: tool.name === "googleSearch" ? "web_search" : tool.name, ...tool.configuration }) } : {}),
-    ...(request.toolChoice ? { tool_choice: request.toolChoice.type === "function" ? { type: "function", name: request.toolChoice.name } : request.toolChoice.type } : {}),
+    ...(request.tools.length > 0 ? { tools: emitResponseTools(request.tools.filter(tool => tool.type !== "function" || tool.declarationSource !== "deferred")) } : {}),
+    ...(request.toolChoice ? { tool_choice: request.toolChoice.type === "function" ? { type: request.toolChoice.inputKind === "text" ? "custom" : "function", name: request.toolChoice.name, ...(request.toolChoice.namespace ? { namespace: request.toolChoice.namespace } : {}) } : request.toolChoice.type } : {}),
     ...(request.parallelToolCalls !== undefined ? { parallel_tool_calls: request.parallelToolCalls } : {}),
     ...(effectiveReasoningEffort || request.reasoning?.summary || extensionOutput.values.reasoning
       ? { reasoning: { ...(isRecord(extensionOutput.values.reasoning) ? extensionOutput.values.reasoning : {}), ...(effectiveReasoningEffort ? { effort: effectiveReasoningEffort } : {}), ...(request.reasoning?.summary ? { summary: request.reasoning.summary } : {}) } }
@@ -630,14 +618,28 @@ function outputBlocks(value: unknown, findings: IrCompatibilityFinding[]): IrCon
       blocks.push(...responseContentBlocks(raw.content, `output.${index}.content`, findings).map((block) => ({ ...block, ...(typeof raw.id === "string" && block.id === undefined ? { id: raw.id } : {}) })));
       continue;
     }
+    if (raw.type === "tool_search_call" && raw.execution === "client" && typeof raw.call_id === "string") {
+      const args = asJsonValue(raw.arguments);
+      if (args === undefined) { findings.push(finding(FORMAT, "input", "unsupported", "pointer_tool_search_invalid", "Invalid client tool-search call.")); continue; }
+      const block: IrContentBlock = {type:"tool_call",id:raw.call_id,name:"tool_search",arguments:args,toolKind:"tool_search",providerMetadata:Object.fromEntries(Object.entries(raw).filter(([key])=>!["type","call_id","arguments","id"].includes(key))) as JsonObject,...(typeof raw.id === "string" ? {itemId:raw.id} : {})};
+      blocks.push(block);
+      continue;
+    }
     const native = nativeResponseItem(raw);
     if (native) { blocks.push(nativeResponseBlock(native)); continue; }
+    if (raw.type === "custom_tool_call" && typeof raw.name === "string" && typeof raw.input === "string" && typeof raw.call_id === "string") {
+      blocks.push({ type: "tool_call", id: raw.call_id, name: raw.name, arguments: { input: raw.input },
+        rawArguments: JSON.stringify({ input: raw.input }), inputKind: "text",
+        ...(typeof raw.namespace === "string" ? { namespace: raw.namespace } : {}),
+        ...(typeof raw.id === "string" ? { itemId: raw.id } : {}) }); continue;
+    }
     if (raw.type === "function_call" && typeof raw.name === "string") {
       const rawArguments = typeof raw.arguments === "string" ? raw.arguments : JSON.stringify(raw.arguments ?? {});
       blocks.push({
         type: "tool_call",
         id: typeof raw.call_id === "string" ? raw.call_id : stableGatewayId("call", "output", String(index), raw.name, rawArguments),
         name: raw.name,
+        ...(typeof raw.namespace === "string" ? { namespace: raw.namespace } : {}),
         arguments: parseJsonValue(rawArguments),
         rawArguments,
         ...(typeof raw.id === "string" ? { itemId: raw.id } : {}),
@@ -656,6 +658,7 @@ function outputBlocks(value: unknown, findings: IrCompatibilityFinding[]): IrCon
       blocks.push({
         type: "reasoning",
         text: summary,
+        ...(Array.isArray(raw.summary) ? { summary: raw.summary as { type: "summary_text"; text: string }[] } : {}),
         ...(typeof raw.id === "string" ? { id: raw.id } : {}),
         ...(encryptedContent !== undefined ? { encryptedContent } : {}),
       });
@@ -741,11 +744,14 @@ export function renderResponsesResponse(
           FORMAT,
         ));
       }
-      output.push({ id: block.id ?? stableGatewayId("rs", response.id, String(index)), type: "reasoning", summary: [{ type: "summary_text", text: block.text }], ...(block.encryptedContent !== undefined ? { encrypted_content: block.encryptedContent } : {}) });
+      output.push({ id: block.id ?? stableGatewayId("rs", response.id, String(index)), type: "reasoning", summary: block.summary ?? [{ type: "summary_text", text: block.text }], ...(block.encryptedContent !== undefined ? { encrypted_content: block.encryptedContent } : {}) });
     } else if (block.type === "tool_call") {
       previousContentIndex = null;
       previousMessageSourceId = undefined;
-      output.push({ id: block.itemId ?? stableGatewayId("fc", response.id, String(index), block.id), type: "function_call", status: "completed", call_id: block.id, name: block.name, arguments: block.rawArguments ?? stringifyJsonValue(block.arguments) });
+      if (block.toolKind === "tool_search") { output.push({...block.providerMetadata,type:"tool_search_call",call_id:block.id,arguments:block.arguments,...(block.itemId ? {id:block.itemId} : {})}); continue; }
+      output.push({ id: block.itemId ?? stableGatewayId("fc", response.id, String(index), block.id), type: block.inputKind === "text" ? "custom_tool_call" : "function_call", ...(block.inputKind === "text" ? {} : { status: "completed" }), call_id: block.id, name: block.name,
+        ...(block.namespace ? { namespace: block.namespace } : {}),
+        ...(block.inputKind === "text" ? { input: isRecord(block.arguments) ? String(block.arguments.input ?? "") : String(block.arguments) } : { arguments: block.rawArguments ?? stringifyJsonValue(block.arguments) }) });
     } else if (block.type === "text" || block.type === "refusal") {
       const content: JsonObject = block.type === "text"
         ? { type: "output_text", text: block.text, annotations: block.annotations ?? [] }

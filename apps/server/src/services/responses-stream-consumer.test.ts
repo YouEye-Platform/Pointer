@@ -12,34 +12,12 @@ function chunkedResponse(chunks: readonly string[]): Response {
 }
 
 describe("Responses stream consumer", () => {
-  test("assembles fragmented text and tool calls without fabricating usage", async () => {
+  test("rejects fragmented output without a real terminal", async () => {
     const response = chunkedResponse([
-      "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hel",
-      "lo\"}\n",
-      "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"id\":\"item-1\",\"call_id\":\"call-1\",\"name\":\"lookup\"}}\n",
-      "data: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":1,\"delta\":\"{\\\"q\\\":1}\"}\n",
-      "data: {\"type\":\"response.function_call_arguments.done\",\"output_index\":1}\n",
+      'data: {"type":"response.output_text.delta","delta":"hel',
+      'lo"}\n\n',
     ]);
-
-    const assembled = await consumeResponsesStream(response, "provider/model", () => "resp-test");
-
-    expect(assembled.id).toBe("resp-test");
-    expect(assembled.usage).toBeUndefined();
-    expect(assembled.output).toEqual([
-      {
-        type: "message",
-        role: "assistant",
-        content: [{ type: "output_text", text: "hello" }],
-      },
-      {
-        type: "function_call",
-        id: "item-1",
-        call_id: "call-1",
-        name: "lookup",
-        arguments: "{\"q\":1}",
-        status: "completed",
-      },
-    ]);
+    await expect(consumeResponsesStream(response, "provider/model")).rejects.toMatchObject({ code: "pointer_stream_interrupted" });
   });
 
   test("processes a final completed event without a trailing newline", async () => {
@@ -48,13 +26,17 @@ describe("Responses stream consumer", () => {
       object: "response",
       status: "completed",
       model: "provider/model",
-      output: [],
+      output: [{type:"message",id:"msg-upstream",role:"assistant",status:"completed",content:[{type:"output_text",text:"hello",annotations:[]}]}],
       usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
     };
     const response = chunkedResponse([
+      `data: ${JSON.stringify({ type: "response.created", response:{id:completed.id,model:completed.model} })}\n\n`,
+      `data: ${JSON.stringify({ type: "response.output_item.added", output_index:0, item:{...completed.output[0],content:[]} })}\n\n`,
+      `data: ${JSON.stringify({ type: "response.output_item.done", output_index:0, item:completed.output[0] })}\n\n`,
       `data: ${JSON.stringify({ type: "response.completed", response: completed })}`,
+
     ]);
 
-    expect(await consumeResponsesStream(response, "fallback")).toEqual(completed);
+    expect(await consumeResponsesStream(response, "fallback")).toMatchObject(completed);
   });
 });

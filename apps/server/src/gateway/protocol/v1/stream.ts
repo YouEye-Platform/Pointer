@@ -1,5 +1,6 @@
-import { nativeResponseItem, NATIVE_RESPONSE_EVENTS } from "./responses-native";
+import { RESPONSES_RESPONSE_METADATA_KEYS, nativeResponseItem, streamResponseItem, responseAnnotationSchema, responseContentPartSchema, responseMessageSchema, NATIVE_RESPONSE_EVENTS } from "./responses-native";
 import type { GatewayApiFormat } from "../../compatibility";
+import {encodeReasoningEnvelope} from './reasoning-envelope';
 import {
   GATEWAY_IR_NAME,
   GATEWAY_IR_VERSION,
@@ -9,6 +10,7 @@ import {
   type IrStreamEvent,
   type IrUsage,
   type JsonObject,
+  type JsonValue,
   irStreamEventSchema,
 } from "./schemas";
 import {
@@ -43,6 +45,19 @@ interface StreamToolCall {
   providerMetadata?: JsonObject;
 }
 
+interface ResponseMessagePart {
+  kind?: string;
+  text?: string;
+  refusal?: string;
+  annotations: Readonly<Record<number, JsonValue>>;
+  closed?: boolean;
+}
+interface ResponseMessageState {
+  id: string;
+  phase?: string;
+  parts: Readonly<Record<number, ResponseMessagePart>>;
+}
+
 export interface StreamAdapterContext {
   requestId: string;
   responseId: string;
@@ -61,6 +76,8 @@ export interface StreamAdapterContext {
   chatReasoningDetails: readonly JsonObject[];
   nativeResponseItems: Readonly<Record<number, string>>;
   nativeResponseItemsDone: Readonly<Record<number, boolean>>;
+  preserveResponsesMessages: boolean;
+  responseMessages: Readonly<Record<number, ResponseMessageState>>;
 }
 
 export interface ParsedStreamEvent {
@@ -81,6 +98,7 @@ export function createStreamAdapterContext(
   model: string,
   requestId: string,
   responseId?: string,
+  preserveResponsesMessages = false,
 ): StreamAdapterContext {
   return {
     requestId,
@@ -98,7 +116,70 @@ export function createStreamAdapterContext(
     chatReasoningDetails: [],
     nativeResponseItems: {},
     nativeResponseItemsDone: {},
+    preserveResponsesMessages,
+    responseMessages: {},
   };
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+    : isRecord(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+}
+
+function messagePartAgrees(part: JsonObject, previous: ResponseMessagePart): boolean {
+  return (previous.kind === undefined || part.type === previous.kind)
+    && (previous.refusal === undefined || part.refusal === previous.refusal)
+    && (previous.text === undefined || part.text === previous.text)
+    && Object.entries(previous.annotations).every(([index, annotation]) => annotation === null
+      || (Array.isArray(part.annotations) && sameJson(part.annotations[Number(index)], annotation)));
+}
+
+function messageSnapshot(value: unknown, state: ResponseMessageState): JsonObject | null {
+  const parsed = responseMessageSchema.safeParse(value);
+  if (!parsed.success || parsed.data.id !== state.id || parsed.data.phase !== state.phase) return null;
+  const item = parsed.data as JsonObject;
+  const content = item.content as JsonObject[];
+  return Object.entries(state.parts).every(([index, previous]) => content[Number(index)]
+    && messagePartAgrees(content[Number(index)]!, previous)) ? item : null;
+}
+
+function responseMessageEvent(data: Record<string, unknown>, type: string, context: StreamAdapterContext): ParsedStreamEvent | GatewayAdapterFailure {
+  const sourceIndex = optionalInteger(data.output_index);
+  const contentIndex = data.content_index === undefined && type !== "response.output_text.annotation.added" ? 0 : optionalInteger(data.content_index);
+  if (sourceIndex === undefined || sourceIndex < 0 || contentIndex === undefined || contentIndex < 0) return streamFailure("responses", "Invalid Responses message index.");
+  const state = context.responseMessages[sourceIndex];
+  if (!state || data.item_id !== state.id || context.nativeResponseItemsDone[sourceIndex]) return streamFailure("responses", "Invalid Responses message identity.");
+  const prior = state.parts[contentIndex] ?? { annotations: {} };
+  if (prior.closed) return streamFailure("responses", "Responses content followed its completion.");
+  let part: ResponseMessagePart = prior;
+  if (type === "response.output_text.delta" || type === "response.refusal.delta") {
+    if (typeof data.delta !== "string") return streamFailure("responses", "Invalid Responses text delta.");
+    if (type === "response.refusal.delta") part = { ...prior, kind: "refusal", refusal: (prior.refusal ?? "") + data.delta };
+    else part = { ...prior, kind: "output_text", text: (prior.text ?? "") + data.delta };
+  } else if (type === "response.output_text.annotation.added") {
+    if (prior.kind === "refusal") return streamFailure("responses", "Responses refusal cannot carry text annotations.");
+    const index = optionalInteger(data.annotation_index);
+    const annotation = responseAnnotationSchema.nullable().safeParse(data.annotation);
+    if (index === undefined || index < 0 || !annotation.success || (index in prior.annotations && !sameJson(prior.annotations[index], annotation.data))) return streamFailure("responses", "Invalid Responses annotation.");
+    part = { ...prior, annotations: { ...prior.annotations, [index]: annotation.data as JsonValue } };
+  } else if (type === "response.refusal.done") {
+    if (typeof data.refusal !== "string" || (prior.refusal !== undefined && prior.refusal !== data.refusal)) return streamFailure("responses", "Invalid Responses completed refusal.");
+    part = { ...prior, kind: "refusal", refusal: data.refusal };
+  } else if (type === "response.output_text.done") {
+    if (typeof data.text !== "string" || (prior.text !== undefined && prior.text !== data.text)) return streamFailure("responses", "Invalid Responses completed text.");
+    part = { ...prior, text: data.text };
+  } else {
+    const parsed = responseContentPartSchema.safeParse(data.part);
+    if (!parsed.success || !messagePartAgrees(parsed.data as JsonObject, prior)) return streamFailure("responses", "Invalid Responses content part.");
+    const snapshot = parsed.data as JsonObject;
+    part = { ...prior, kind: snapshot.type as string,
+      ...(type.endsWith(".done") ? { ...(snapshot.type === "refusal" ? {refusal: snapshot.refusal as string} : {text: snapshot.text as string}), closed: true } : {}),
+      annotations: { ...prior.annotations, ...Object.fromEntries((Array.isArray(snapshot.annotations) ? snapshot.annotations : []).map((annotation, index) => [index, annotation])) } };
+  }
+  const located = sourceBlockIndex(context, `output:${sourceIndex}`, sourceIndex);
+  const current = { ...located.context, responseMessages: { ...context.responseMessages, [sourceIndex]: { ...state, parts: { ...state.parts, [contentIndex]: part } } } };
+  return finalized(current, [{ ...eventBase("responses", current), type: "responses_native_event", event: type, data: { ...asJsonObject(data)!, output_index: located.index } }]);
 }
 
 function chatReasoningDetailObjects(value: unknown): JsonObject[] {
@@ -269,9 +350,10 @@ function closeBlock(
   context: StreamAdapterContext,
   events: IrStreamEvent[],
   index: number,
+  block?: Extract<IrContentBlock, { type: "reasoning" }>,
 ): StreamAdapterContext {
   if (context.openBlocks[index] === undefined) return context;
-  events.push({ ...eventBase(format, context), type: "content_end", index });
+  events.push({ ...eventBase(format, context), type: "content_end", index, ...(block ? { block } : {}) });
   const openBlocks = { ...context.openBlocks };
   delete openBlocks[index];
   return { ...context, openBlocks };
@@ -635,6 +717,11 @@ function parseMessagesEvent(
         callId: tool.callId,
         delta: data.delta.partial_json,
       });
+    } else if (data.delta.type === "signature_delta" && data.delta.signature === "") {
+      // Some Messages providers terminate thinking with an empty signature
+      // marker. It carries no opaque data; do not reject an otherwise valid
+      // tool stream. Nonempty signatures still fail closed until represented.
+      return finalized(current, []);
     } else {
       return streamFailure("messages", "Unsupported Messages content block delta type.");
     }
@@ -722,12 +809,13 @@ function parseResponsesEvent(
       model: context.started ? context.model : requiredString(data.response.model, context.model),
     };
     current = startResponse("responses", current, events);
+    if (current.preserveResponsesMessages) {
+      const metadata = Object.fromEntries(Object.entries(asJsonObject(data.response)!).filter(([key]) => RESPONSES_RESPONSE_METADATA_KEYS.has(key)));
+      for (const event of events) if (event.type === "response_start") event.responsesMetadata = metadata;
+    }
   } else if (current.nativeResponseItems[optionalInteger(data.output_index) ?? -1] === "message"
-    && ["response.output_text.delta", "response.output_text.done", "response.content_part.added", "response.content_part.done"].includes(type)) {
-    const sourceIndex = optionalInteger(data.output_index)!;
-    if (current.nativeResponseItemsDone[sourceIndex] || (type.endsWith(".delta") && typeof data.delta !== "string")) return streamFailure("responses", "Invalid phased message event.");
-    const located = sourceBlockIndex(current, `output:${sourceIndex}`, sourceIndex);
-    events.push({ ...eventBase("responses", current), type: "responses_native_event", event: type, data: { ...asJsonObject(data)!, output_index: located.index } });
+    && ["response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added", "response.refusal.delta", "response.refusal.done", "response.content_part.added", "response.content_part.done"].includes(type)) {
+    return responseMessageEvent(data, type, current);
   } else if (type === "response.output_text.delta" && typeof data.delta === "string") {
     current = startResponse("responses", current, events);
     const sourceIndex = optionalInteger(data.output_index) ?? 0;
@@ -780,10 +868,15 @@ function parseResponsesEvent(
     const sourceIndex = optionalInteger(data.output_index) ?? 0;
     const located = sourceBlockIndex(current, `output:${sourceIndex}`, sourceIndex);
     current = located.context;
-    const native = nativeResponseItem(data.item);
+    const native = streamResponseItem(data.item, current.preserveResponsesMessages);
+    if (current.preserveResponsesMessages && data.item.type === "message" && !native) return streamFailure("responses", "Invalid Responses message.");
     if (native) {
       if (current.nativeResponseItems[sourceIndex]) return streamFailure("responses", "Repeated native Responses item.");
       current = { ...current, nativeResponseItems: { ...current.nativeResponseItems, [sourceIndex]: String(native.type) } };
+      if (native.type === "message") {
+        if (typeof native.id !== "string") return streamFailure("responses", "Responses message ID is required.");
+        current = { ...current, responseMessages: { ...current.responseMessages, [sourceIndex]: { id: native.id, ...(typeof native.phase === "string" ? { phase: native.phase } : {}), parts: {} } } };
+      }
       events.push({ ...eventBase("responses", current), type: "responses_native_event", event: type, data: { ...asJsonObject(data)!, output_index: located.index } });
     } else if (data.item.type === "function_call") {
       const tool: StreamToolCall = {
@@ -820,12 +913,33 @@ function parseResponsesEvent(
     const sourceIndex = optionalInteger(data.output_index) ?? 0;
     const located = sourceBlockIndex(current, `output:${sourceIndex}`, sourceIndex);
     if (current.nativeResponseItems[sourceIndex]) {
-      const native = nativeResponseItem(data.item);
+      const native = current.responseMessages[sourceIndex]
+        ? messageSnapshot(data.item, current.responseMessages[sourceIndex]!)
+        : nativeResponseItem(data.item, false);
       if (!native || native.type !== current.nativeResponseItems[sourceIndex]) return streamFailure("responses", "Invalid native Responses completed item.");
       if (current.nativeResponseItemsDone[sourceIndex]) return streamFailure("responses", "Repeated native Responses completion.");
+      if (native.type === "message") {
+        const state = current.responseMessages[sourceIndex]!;
+        const parts = Object.fromEntries((native.content as JsonObject[]).map((part, index) => [index, {
+          kind: String(part.type),
+          ...(typeof part.text === "string" ? { text: part.text } : {}),
+          ...(typeof part.refusal === "string" ? { refusal: part.refusal } : {}),
+          annotations: Object.fromEntries((Array.isArray(part.annotations) ? part.annotations : []).map((annotation, index) => [index, annotation])),
+          closed: true,
+        }]));
+        current = { ...current, responseMessages: { ...current.responseMessages, [sourceIndex]: { ...state, parts } } };
+      }
       current = { ...current, nativeResponseItemsDone: { ...current.nativeResponseItemsDone, [sourceIndex]: true } };
       events.push({ ...eventBase("responses", current), type: "responses_native_event", event: type, data: { ...asJsonObject(data)!, output_index: located.index } });
-    } else current = closeBlock("responses", located.context, events, located.index);
+    } else {
+      const reasoning = isRecord(data.item) && data.item.type === "reasoning" ? {
+        type: "reasoning" as const, text: "",
+        ...(typeof data.item.id === "string" ? { id: data.item.id } : {}),
+        ...(typeof data.item.encrypted_content === "string" ? { encryptedContent: data.item.encrypted_content } : {}),
+        ...(Array.isArray(data.item.summary) ? { summary: data.item.summary as { type: "summary_text"; text: string }[] } : {}),
+      } : undefined;
+      current = closeBlock("responses", located.context, events, located.index, reasoning);
+    }
   } else if (NATIVE_RESPONSE_EVENTS.has(type) && current.nativeResponseItems[optionalInteger(data.output_index) ?? -1]) {
     const sourceIndex = optionalInteger(data.output_index)!;
     if (current.nativeResponseItemsDone[sourceIndex] || (type.endsWith(".delta") && typeof data.delta !== "string")) return streamFailure("responses", "Invalid native Responses item event.");
@@ -875,6 +989,17 @@ function parseResponsesEvent(
     };
     current = startResponse("responses", current, events);
     if (type === "response.completed" && Object.keys(current.nativeResponseItems).some(index => !current.nativeResponseItemsDone[Number(index)])) return streamFailure("responses", "Native Responses item did not complete.");
+    const responsesMessageSnapshots: { index: number; item: JsonObject }[] = [];
+    if (Array.isArray(data.response.output) && data.response.output.length > 0) {
+      for (const [sourceIndex, state] of Object.entries(current.responseMessages)) {
+        const item = messageSnapshot(data.response.output[Number(sourceIndex)], state);
+        if (!item) {
+          if (type === "response.completed") return streamFailure("responses", "Invalid Responses terminal message.");
+          continue;
+        }
+        responsesMessageSnapshots.push({ index: sourceBlockIndex(current, `output:${sourceIndex}`, Number(sourceIndex)).index, item });
+      }
+    }
     current = closeAllBlocks("responses", current, events);
     const normalized = responsesFinishReason(
       type,
@@ -883,7 +1008,10 @@ function parseResponsesEvent(
     );
     const usage = usageFromResponses(data.response.usage);
     if (usage) events.push({ ...eventBase("responses", current), type: "usage", usage });
-    events.push({ ...eventBase("responses", current), type: "response_end", ...normalized });
+    events.push({ ...eventBase("responses", current), type: "response_end", ...normalized,
+      ...(responsesMessageSnapshots.length ? { responsesMessageSnapshots } : {}),
+      ...(current.preserveResponsesMessages ? { responsesMetadata: Object.fromEntries(Object.entries(asJsonObject(data.response)!).filter(([key]) => RESPONSES_RESPONSE_METADATA_KEYS.has(key))) } : {}),
+    });
     return finalized(current, events, {
       usage: usage ?? current.usage,
       ...normalized,
@@ -1289,7 +1417,9 @@ export function renderPublicStreamEvent(
           type: "content_block_start",
           index: event.index,
           content_block: event.block.type === "reasoning"
-            ? { type: "thinking", thinking: "", signature: event.block.signature ?? "" }
+            ? event.block.encryptedContent
+              ? {type:'redacted_thinking',data:(event.block.encryptedSourceFormat??event.sourceFormat)==='messages'?event.block.encryptedContent:encodeReasoningEnvelope(event.block,event.sourceFormat)}
+              : { type: "thinking", thinking: "", signature: event.block.signature ?? "" }
             : { type: "text", text: "" },
         },
       }];
@@ -1672,6 +1802,18 @@ function messagesTrace(
   let started = false;
   for (const event of events) {
     if (event.type === "usage") continue;
+    // Responses ciphertext is finalized at item completion. Do not emit a
+    // fabricated native thinking signature while waiting for that state.
+    if (event.sourceFormat === 'responses') {
+      if (event.type === 'content_start' && event.block.type === 'reasoning') continue;
+      if (event.type === 'reasoning_delta') continue;
+      if (event.type === 'content_end' && event.block?.type === 'reasoning') {
+        if (!event.block.encryptedContent) throw new Error('Cross-format reasoning state unavailable');
+        rendered.push({event:'content_block_start',data:{type:'content_block_start',index:event.index,content_block:{type:'redacted_thinking',data:encodeReasoningEnvelope(event.block,event.sourceFormat)}}},
+          {event:'content_block_stop',data:{type:'content_block_stop',index:event.index}});
+        continue;
+      }
+    }
     if (event.type === "response_start") {
       started = true;
       const nativeUsage = usage ? usageToMessages(usage) : { input_tokens: 0, output_tokens: 0 };
@@ -1768,10 +1910,19 @@ function responsesTrace(
   const completedItems = new Map<number, JsonObject>();
   for (const event of events) {
     if (event.type === "usage") continue;
+    if (event.type === "response_start") {
+      const start = renderPublicStreamEvent("responses", event);
+      for (const frame of start) {
+        const data = frame.data as JsonObject;
+        data.response = { ...event.responsesMetadata, ...(data.response as JsonObject) };
+      }
+      rendered.push(...start);
+      continue;
+    }
     if (event.type === "responses_native_event") {
       rendered.push({ event: event.event, data: event.data });
       if (event.event === "response.output_item.done" && typeof event.data.output_index === "number") {
-        const item = nativeResponseItem(event.data.item);
+        const item = streamResponseItem(event.data.item, true);
         if (item) completedItems.set(event.data.output_index, item);
       }
       continue;
@@ -1885,7 +2036,8 @@ function responsesTrace(
         const completedItem: JsonObject = {
           id: item.id,
           type: "reasoning",
-          summary: [part],
+          summary: event.block?.summary ?? [part],
+          ...(event.block?.encryptedContent !== undefined ? { encrypted_content: event.block.encryptedContent } : {}),
         };
         completedItems.set(event.index, completedItem);
         rendered.push(
@@ -1953,12 +2105,14 @@ function responsesTrace(
       continue;
     }
     if (event.type === "response_end") {
+      for (const snapshot of event.responsesMessageSnapshots ?? []) completedItems.set(snapshot.index, snapshot.item);
       const terminal = terminalStatus(event.finishReason);
       rendered.push({
         event: terminal.event,
         data: {
           type: terminal.event,
           response: {
+            ...event.responsesMetadata,
             id: event.responseId,
             object: "response",
             status: terminal.status,
@@ -1975,7 +2129,9 @@ function responsesTrace(
     }
     rendered.push(...renderPublicStreamEvent("responses", event));
   }
-  return rendered;
+  return rendered.map((frame, sequenceNumber) => ({ ...frame,
+    data: { ...(frame.data as JsonObject), sequence_number: sequenceNumber },
+  }));
 }
 
 /** Renders a complete IR trace while preserving target-native lifecycle and usage placement. */
@@ -1984,6 +2140,7 @@ export function renderPublicStreamTrace(
   events: readonly IrStreamEvent[],
 ): PublicStreamEvent[] {
   const usage = finalUsage(events);
+  if (format !== "responses" && format !== "messages" && events.some(event => event.type === "content_end" && event.block?.encryptedContent)) throw new Error("Opaque reasoning replay is protocol scoped");
   if (format === "messages") return messagesTrace(events, usage);
   if (format === "responses") return responsesTrace(events, usage);
   if (format === "google-generate-content") return googleTrace(events, usage);
@@ -2018,6 +2175,8 @@ export function renderPublicStreamTrace(
     }
     rendered.push(...renderPublicStreamEvent(format, event));
   }
-  if (pendingUsage) rendered.push(...renderPublicStreamEvent(format, pendingUsage));
+  // Chat usage belongs at the terminal. Emitting it at the temporary tail
+  // would move that frame after later content when this trace is rerendered,
+  // causing the incremental selector to skip the newly inserted content.
   return rendered;
 }

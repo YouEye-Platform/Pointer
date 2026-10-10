@@ -7,7 +7,7 @@ Use the versions pinned at the repository root:
 - Node.js 22.23.2;
 - pnpm 10.6.2;
 - TypeScript 5.9.3;
-- Bun 1.3.x;
+- Bun 1.4.2;
 - PostgreSQL 17 for integration tests.
 
 Run `pnpm install --frozen-lockfile` after the lockfile is committed. Provider
@@ -113,3 +113,17 @@ DATABASE_URL='postgresql:///pointer_dev?host=/var/run/postgresql' \
 
 `db:push` is only a development schema-diff aid. It is not a production
 migration command.
+
+## Codex model discovery
+
+The Codex backend filters model discovery by `client_version`. The provider
+handler pins the tested native CLI compatibility version (currently `0.159.2`),
+independently of Pointer's package version. `0.0.0` is also filtered and must not
+be treated as an unversioned request. Check the connected account's returned
+catalog when upgrading; a public model release alone does not establish account
+availability. Refresh the account inventory after installing a discovery update.
+
+A successful connection can still return an older, incomplete model list. The
+compatibility regression therefore checks discovery of GPT-6.1 Sol alongside
+existing models, not just HTTP success. The fallback catalog is not consulted
+when the authenticated backend returns a nonempty list.

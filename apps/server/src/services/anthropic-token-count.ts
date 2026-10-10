@@ -50,6 +50,7 @@ function blockTokens(block: IrContentBlock): number {
   if (block.type === "tool_result") {
     return 6 + jsonTokens(block.output) + (block.isError ? 1 : 0);
   }
+  if (block.type === "tool_declaration") return 4 + jsonTokens(block.tools);
   return 4 + jsonTokens(block.extension.value);
 }
 

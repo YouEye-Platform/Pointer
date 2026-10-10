@@ -12,6 +12,16 @@ endpoints:
   responses: /responses
 
 gateway:
+  wire:
+    additionalTools: true
+    customTools: true
+    namespaceTools: true
+    grammar: true
+    toolSearch: true
+    webSearch: true
+    clientMetadata: true
+    reasoningContext: true
+    verbosity: true
   operations:
     generate:
       format: responses

@@ -49,6 +49,9 @@ describe("YouEye release manifest", () => {
     const manifest = JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8"));
     expect(manifest.repository).toBe(PUBLIC_CANONICAL_REPOSITORY);
     expect(manifest.runtime.schemaVersion).toBe(LATEST_POINTER_SCHEMA_VERSION);
+    expect(manifest.runtime.bun).toBe('1.4.2 (bundled)');
+    expect(manifest.runtime.engine).toEqual({package: '@bitkyc08/opencodex', version: '2.79.0'});
+    expect(manifest.entrypoints.ui).toBe('ui/manifest.json');
   });
 
   test("does not fabricate absent checkout provenance and refuses unrelated sources", async () => {

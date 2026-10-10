@@ -1,5 +1,11 @@
 # Pointer
 
+Pointer uses [OpenCodex](https://opencodex.me/) for model proxying, alongside
+Pointer's accounts, model groups, application instances and host integrations.
+Pointer-owned code is MIT licensed; see [attribution](NOTICE.md) for upstream
+and asset notices. Engine integration acceptance is tracked in
+[the engine integration document](docs/opencodex-engine.md).
+
 Pointer is a self-hosted AI gateway and browser control surface. It provides
 one product and one repository while retaining a strict runtime boundary:
 
@@ -17,7 +23,7 @@ mode retains isolated management and inference listeners for YouEye.
 
 ## Quick start
 
-Requirements: Node.js 22.23.2, pnpm 10.6.2, Bun 1.3.x and PostgreSQL 17.
+Requirements: Node.js 22.23.2, pnpm 10.6.2, Bun 1.4.2 and PostgreSQL 17.
 
 ```bash
 pnpm install

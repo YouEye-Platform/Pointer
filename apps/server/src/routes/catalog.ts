@@ -57,11 +57,12 @@ export async function loadCatalog(userId?: string) {
           nickname: schema.providerAccounts.nickname,
         })
           .from(schema.providerAccounts)
-          .innerJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
+          .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
           .innerJoin(schema.providerAccountModels, eq(schema.providerAccountModels.providerAccountId, schema.providerAccounts.id))
           .where(and(
             eq(schema.providerAccounts.userId, userId),
             eq(schema.providerAccounts.status, "active"),
+            sql`(${schema.providerKeys.id} is not null or ${schema.providerAccounts.engineProvider} is not null)`,
           ))
         : Promise.resolve([]),
     ]);

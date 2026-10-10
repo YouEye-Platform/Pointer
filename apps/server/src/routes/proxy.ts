@@ -1,4 +1,9 @@
+import { fetchCustomProviderEndpoint } from "../services/endpoint-fetch";
+import { resolveWireCapabilities } from "../gateway/wire-capabilities";
+import type { ToolCodecContext } from "../gateway/protocol/v1/tool-codec";
+import { validateProviderEndpoint } from "../services/custom-endpoint";
 import { Hono, type Context } from "hono";
+import { providerSessionId } from "../providers/provider-session";
 import { apiKeyMiddleware, type ApiKeyContext } from "../middleware/api-key";
 import { registry, type ResolvedProvider } from "../providers/registry";
 import { refineProxyRequest, type ProxyRequest } from "../providers/types";
@@ -14,7 +19,7 @@ import { sanitizeAnthropicRequestBody } from "../services/anthropic-request";
 import { countAnthropicRequestTokens } from "../services/anthropic-token-count";
 import { estimateAnthropicInputTokens } from "../services/anthropic-token-count";
 import { listModelsForApiKey } from "../services/model-resolution";
-import { consumeResponsesStream } from "../services/responses-stream-consumer";
+import { consumeResponsesStream, ResponsesStreamError } from "../services/responses-stream-consumer";
 import {
   getProviderNativeFormat,
   type ApiFormat,
@@ -32,6 +37,7 @@ import {
   requestsAnthropicServerTool,
   unsupportedGatewayCapability,
 } from "../gateway/preflight";
+import { SseEventDecoder } from "../gateway/sse-event-decoder";
 import { SseLineDecoder } from "../gateway/sse-line-decoder";
 import {
   gatewayResponseHeaders as v1GatewayResponseHeaders,
@@ -60,6 +66,9 @@ app.use("*", apiKeyMiddleware);
 googleProxyRoutes.use("*", apiKeyMiddleware);
 
 interface RequestCtx extends UsageContext {
+  providerSessionId?: string;
+  toolContext?: ToolCodecContext;
+  customEndpoint?: boolean;
   requestId: string;
   apiKeyId: string;
   userId: string;
@@ -137,23 +146,53 @@ function gatewayResponseHeaders(
   ctx: RequestCtx,
   contentType = "application/json; charset=UTF-8",
 ): Record<string, string> {
-  return v1GatewayResponseHeaders(ctx.requestId, contentType);
+  return { ...v1GatewayResponseHeaders(ctx.requestId, contentType), ...(ctx.toolContext?.grammarPrompted ? { "x-pointer-tool-grammar": "prompt-only" } : {}) };
 }
 
 function upstreamHeaders(response: Response): Record<string, string> {
   return Object.fromEntries(response.headers.entries());
 }
 
-function gatewayErrorResponse(
+async function gatewayErrorResponse(
   response: Response,
   providerFormat: ApiFormat,
   clientFormat: ApiFormat,
   ctx: RequestCtx,
-): Response {
+): Promise<Response> {
+  let body: unknown;
+  if (response.body) {
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Error body deadline")), 5000);
+    });
+    try {
+      while (bytes <= 16384) {
+        const next = await Promise.race([reader.read(), deadline]);
+        if (next.done) break;
+        bytes += next.value.length;
+        chunks.push(next.value);
+      }
+      if (bytes <= 16384) {
+        const buffer = new Uint8Array(bytes);
+        let offset = 0;
+        for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
+        body = JSON.parse(new TextDecoder().decode(buffer));
+      }
+    } catch {
+      // Invalid, oversized or delayed provider errors keep the safe status category.
+    } finally {
+      clearTimeout(timer!);
+      await reader.cancel().catch(() => {});
+    }
+  }
   const selected = selectGatewayProxyError({
     sourceFormat: providerFormat,
     targetFormat: clientFormat,
     status: response.status,
+    body,
     headers: upstreamHeaders(response),
     requestId: ctx.requestId,
   });
@@ -185,6 +224,7 @@ function gatewayJsonResponse(
     targetFormat: clientFormat,
     payload: providerPayload,
     model: ctx.publicModelId ?? ctx.modelId,
+    toolContext: ctx.toolContext,
   });
   const responseBody = selected.ok
     && clientFormat === "google-generate-content"
@@ -335,12 +375,12 @@ function logUpstreamFailure(ctx: RequestCtx, statusCode: number) {
   });
 }
 
-function upstreamTransportErrorResponse(
+async function upstreamTransportErrorResponse(
   error: UpstreamTransportError,
   providerFormat: ApiFormat,
   clientFormat: ApiFormat,
   ctx: RequestCtx,
-): Response {
+): Promise<Response> {
   const status = error.timeout ? 504 : 502;
   logUpstreamFailure(ctx, status);
   console.error(error.timeout
@@ -369,6 +409,24 @@ function streamOutcome(
   return { statusCode: 200, metrics: {} };
 }
 
+function bufferedStreamErrorResponse(error: ResponsesStreamError, format: ApiFormat, ctx: RequestCtx): Response {
+  recordUsage(ctx, 0, 0, 502, Date.now() - ctx.startTime, null, ctx.source, {
+    outcome: error.code === "pointer_stream_interrupted" ? "incomplete_stream" : "upstream_error",
+    errorType: error.code, errorMessage: error.message,
+  });
+  const selected = selectGatewayProxyError({sourceFormat: "responses", targetFormat: format,
+    status: 502, body: null, requestId: ctx.requestId});
+  const body = selected.responseBody;
+  const detail = jsonObjectValue(body.error);
+  if (detail) {
+    detail.message = error.message;
+    if (format === "messages") detail.type = error.code;
+    else if (format === "google-generate-content") detail.details = [{ "@type": "type.googleapis.com/pointer.gateway.v1.ErrorInfo", reason: error.code }];
+    else detail.code = error.code;
+  }
+  return dynamicJsonResponse(body, 502);
+}
+
 function logTranslationFailure(ctx: RequestCtx, error: unknown) {
   const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
   recordUsage(ctx, 0, 0, timeout ? 504 : 500, Date.now() - ctx.startTime, null, ctx.source, {
@@ -379,7 +437,13 @@ function logTranslationFailure(ctx: RequestCtx, error: unknown) {
 }
 
 async function fetchUpstream(ctx: RequestCtx, url: string, init: RequestInit) {
-  const response = await fetchWithClientAbort(url, init, ctx.clientSignal);
+  if (ctx.customEndpoint) {
+    const base = new URL(ctx.providerBaseUrl!);
+    const destination = new URL(url);
+    if (destination.origin !== base.origin || !destination.pathname.startsWith(base.pathname.replace(/\/$/, "") + "/")) throw new Error("Provider destination escaped its account endpoint");
+    await validateProviderEndpoint(`${destination.origin}${destination.pathname}`);
+  }
+  const response = await fetchWithClientAbort(url, { ...init, redirect: "error" }, ctx.clientSignal, ctx.customEndpoint ? fetchCustomProviderEndpoint : fetch);
   const limits: Record<string, string> = {};
   response.headers.forEach((value, key) => {
     if (key === "retry-after" || key.includes("ratelimit") || key.includes("rate-limit")) limits[key] = value;
@@ -621,7 +685,11 @@ async function googleRequestContext(
     apiKey.userId,
     resolved.providerAccountId,
   );
+  if (resolved.providerId === "opencode-go" && !providerSessionId(c.req.raw.headers)) {
+    return c.json({error:{type:"invalid_request_error",code:"provider_session_required",message:"OpenCode Go requires a stable conversation header: x-opencode-session (or the native session_id header)."}},400);
+  }
   const ctx: RequestCtx = {
+    providerSessionId: providerSessionId(c.req.raw.headers),
     requestId: c.get("gatewayRequestId"),
     apiKeyId: apiKey.id,
     userId: apiKey.userId,
@@ -635,6 +703,7 @@ async function googleRequestContext(
     providerApiKey,
     providerUserId: providerOAuthCredential?.userId,
     providerBaseUrl: provider.manifest.baseUrl,
+    customEndpoint: provider.manifest.endpoint?.mode === "required",
     providerNativeEndpoint: resolved.nativeEndpoint ?? undefined,
     clientSignal: c.req.raw.signal,
     startTime: Date.now(),
@@ -953,7 +1022,7 @@ async function handleGoogleGeneration(
   }
   const execution = await googleRequestContext(c, target.model);
   if (execution instanceof Response) return execution;
-  const { resolved, nativeFormat, ctx } = execution;
+  const { resolved, nativeFormat, ctx, provider: resolvedProvider } = execution;
   if (
     nativeFormat === "google-generate-content"
     && resolved.providerMethods.length > 0
@@ -970,16 +1039,16 @@ async function handleGoogleGeneration(
   if (nativeOnlyReason) {
     return googleError(c, 400, "pointer_feature_unsupported", nativeOnlyReason);
   }
+  const unsupported = unsupportedGatewayCapability(payload, resolved.capabilities);
+  if (unsupported) {
+    return googleError(
+      c,
+      400,
+      "pointer_feature_unsupported",
+      `Model does not support requested capability: ${unsupported}.`,
+    );
+  }
   if (nativeFormat !== "google-generate-content") {
-    const unsupported = unsupportedGatewayCapability(payload, resolved.capabilities);
-    if (unsupported) {
-      return googleError(
-        c,
-        400,
-        "pointer_feature_unsupported",
-        `Model does not support requested capability: ${unsupported}.`,
-      );
-    }
     if (normalized.value.reasoning?.enabled && !resolved.capabilities.reasoning) {
       return googleError(
         c,
@@ -1000,6 +1069,7 @@ async function handleGoogleGeneration(
         normalized.value.reasoning?.enabled,
       ),
       providerModelId: ctx.providerModelId,
+      wireCapabilities: resolveWireCapabilities(nativeFormat, resolvedProvider.manifest.gateway?.wire, resolved.wireCapabilities, resolvedProvider.endpointWireCapabilities),
     });
     if (!selected.ok) {
       return new Response(JSON.stringify(selected.responseBody), {
@@ -1007,6 +1077,7 @@ async function handleGoogleGeneration(
         headers: gatewayResponseHeaders(ctx),
       });
     }
+    ctx.toolContext = selected.toolContext;
     const providerRequestBody = refinedProviderRequest(
       nativeFormat === "responses" && !stream
         ? { ...selected.request, stream: true }
@@ -1036,7 +1107,7 @@ async function handleGoogleGeneration(
       return streamWithTranslation(response, nativeFormat, "google-generate-content", ctx);
     }
     if (nativeFormat === "responses") {
-      const assembled = await consumeResponsesStream(response, ctx.providerModelId);
+      const assembled = await consumeResponsesStream(response, ctx.providerModelId, ctx.requestId);
       return gatewayJsonResponse(
         assembled,
         nativeFormat,
@@ -1054,6 +1125,7 @@ async function handleGoogleGeneration(
       formatUsageSnapshot(nativeFormat, responseBody),
     );
   } catch (error) {
+    if (error instanceof ResponsesStreamError) return bufferedStreamErrorResponse(error, "google-generate-content", ctx);
     if (ctx.clientSignal.aborted) return clientAbortResponse(ctx);
     if (error instanceof UpstreamTransportError) {
       return upstreamTransportErrorResponse(
@@ -1303,7 +1375,11 @@ app.post("/chat/completions", async (c) => {
     return c.json({ error: { message: `Provider not found: ${resolved.providerId}` } }, 404);
   }
 
+  if (resolved.providerId === "opencode-go" && !providerSessionId(c.req.raw.headers)) {
+    return c.json({error:{type:"invalid_request_error",code:"provider_session_required",message:"OpenCode Go requires a stable conversation header: x-opencode-session (or the native session_id header)."}},400);
+  }
   const ctx: RequestCtx = {
+    providerSessionId: providerSessionId(c.req.raw.headers),
     requestId: c.get("gatewayRequestId"),
     apiKeyId: apiKey.id,
     userId: apiKey.userId,
@@ -1316,6 +1392,7 @@ app.post("/chat/completions", async (c) => {
     providerApiKey,
     providerUserId: providerOAuthCredential?.userId,
     providerBaseUrl: resolvedProvider.manifest.baseUrl,
+    customEndpoint: resolvedProvider.manifest.endpoint?.mode === "required",
     providerNativeEndpoint: resolved.nativeEndpoint ?? undefined,
     clientSignal: c.req.raw.signal,
     startTime,
@@ -1330,8 +1407,10 @@ app.post("/chat/completions", async (c) => {
       targetFormat: nativeFormat,
       payload: body,
       providerModelId: ctx.providerModelId,
+      wireCapabilities: resolveWireCapabilities(nativeFormat, resolvedProvider.manifest.gateway?.wire, resolved.wireCapabilities, resolvedProvider.endpointWireCapabilities),
     });
     if (!selected.ok) return c.json(selected.responseBody, selected.status);
+    ctx.toolContext = selected.toolContext;
     const providerRequestBody = refinedProviderRequest(selected.request, "chat-completions");
     if (providerRequestBody instanceof Response) return providerRequestBody;
     allowLongLivedStream(c.env, c.req.raw, providerRequestBody.stream);
@@ -1357,6 +1436,7 @@ app.post("/chat/completions", async (c) => {
 
     return c.json({ error: { message: `Unsupported provider format: ${nativeFormat}` } }, 500);
   } catch (err: unknown) {
+    if (err instanceof ResponsesStreamError) return bufferedStreamErrorResponse(err, "chat-completions", ctx);
     if (ctx.clientSignal.aborted) return clientAbortResponse(ctx);
     if (err instanceof UpstreamTransportError) {
       return upstreamTransportErrorResponse(err, nativeFormat, "chat-completions", ctx);
@@ -1448,7 +1528,11 @@ app.post("/messages", async (c) => {
     return c.json({ error: { type: "invalid_request_error", message: `Provider not found: ${resolved.providerId}` } }, 404);
   }
 
+  if (resolved.providerId === "opencode-go" && !providerSessionId(c.req.raw.headers)) {
+    return c.json({error:{type:"invalid_request_error",code:"provider_session_required",message:"OpenCode Go requires a stable conversation header: x-opencode-session (or the native session_id header)."}},400);
+  }
   const ctx: RequestCtx = {
+    providerSessionId: providerSessionId(c.req.raw.headers),
     requestId: c.get("gatewayRequestId"),
     apiKeyId: apiKey.id,
     userId: apiKey.userId,
@@ -1461,6 +1545,7 @@ app.post("/messages", async (c) => {
     providerApiKey,
     providerUserId: providerOAuthCredential?.userId,
     providerBaseUrl: resolvedProvider.manifest.baseUrl,
+    customEndpoint: resolvedProvider.manifest.endpoint?.mode === "required",
     providerNativeEndpoint: resolved.nativeEndpoint ?? undefined,
     clientSignal: c.req.raw.signal,
     startTime,
@@ -1475,8 +1560,10 @@ app.post("/messages", async (c) => {
       targetFormat: nativeFormat,
       payload: body,
       providerModelId: ctx.providerModelId,
+      wireCapabilities: resolveWireCapabilities(nativeFormat, resolvedProvider.manifest.gateway?.wire, resolved.wireCapabilities, resolvedProvider.endpointWireCapabilities),
     });
     if (!selected.ok) return c.json(selected.responseBody, selected.status);
+    ctx.toolContext = selected.toolContext;
     const providerRequestBody = refinedProviderRequest(selected.request, "messages");
     if (providerRequestBody instanceof Response) return providerRequestBody;
     allowLongLivedStream(c.env, c.req.raw, providerRequestBody.stream);
@@ -1502,6 +1589,7 @@ app.post("/messages", async (c) => {
 
     return c.json({ error: { type: "api_error", message: `Unsupported provider format: ${nativeFormat}` } }, 500);
   } catch (err: unknown) {
+    if (err instanceof ResponsesStreamError) return bufferedStreamErrorResponse(err, "messages", ctx);
     if (ctx.clientSignal.aborted) return clientAbortResponse(ctx);
     if (err instanceof UpstreamTransportError) {
       return upstreamTransportErrorResponse(err, nativeFormat, "messages", ctx);
@@ -1548,7 +1636,11 @@ app.post("/responses", async (c) => {
     return c.json({ error: { message: `Provider not found: ${resolved.providerId}` } }, 404);
   }
 
+  if (resolved.providerId === "opencode-go" && !providerSessionId(c.req.raw.headers)) {
+    return c.json({error:{type:"invalid_request_error",code:"provider_session_required",message:"OpenCode Go requires a stable conversation header: x-opencode-session (or the native session_id header)."}},400);
+  }
   const ctx: RequestCtx = {
+    providerSessionId: providerSessionId(c.req.raw.headers),
     requestId: c.get("gatewayRequestId"),
     apiKeyId: apiKey.id,
     userId: apiKey.userId,
@@ -1561,6 +1653,7 @@ app.post("/responses", async (c) => {
     providerApiKey,
     providerUserId: providerOAuthCredential?.userId,
     providerBaseUrl: resolvedProvider.manifest.baseUrl,
+    customEndpoint: resolvedProvider.manifest.endpoint?.mode === "required",
     providerNativeEndpoint: resolved.nativeEndpoint ?? undefined,
     clientSignal: c.req.raw.signal,
     startTime,
@@ -1575,8 +1668,10 @@ app.post("/responses", async (c) => {
       targetFormat: nativeFormat,
       payload: body,
       providerModelId: ctx.providerModelId,
+      wireCapabilities: resolveWireCapabilities(nativeFormat, resolvedProvider.manifest.gateway?.wire, resolved.wireCapabilities, resolvedProvider.endpointWireCapabilities),
     });
     if (!selected.ok) return c.json(selected.responseBody, selected.status);
+    ctx.toolContext = selected.toolContext;
     const providerRequestBody = refinedProviderRequest(selected.request, "responses");
     if (providerRequestBody instanceof Response) return providerRequestBody;
     allowLongLivedStream(c.env, c.req.raw, providerRequestBody.stream);
@@ -1602,6 +1697,7 @@ app.post("/responses", async (c) => {
 
     return c.json({ error: { message: `Unsupported provider format: ${nativeFormat}` } }, 500);
   } catch (err: unknown) {
+    if (err instanceof ResponsesStreamError) return bufferedStreamErrorResponse(err, "responses", ctx);
     if (ctx.clientSignal.aborted) return clientAbortResponse(ctx);
     if (err instanceof UpstreamTransportError) {
       return upstreamTransportErrorResponse(err, nativeFormat, "responses", ctx);
@@ -1773,7 +1869,7 @@ async function handleChatToResponses(c: ProxyContext, body: ProxyRequest, ctx: R
   }
 
   // Non-streaming: consume the Responses SSE stream, assemble final response
-  const assembled = await consumeResponsesStream(response, ctx.modelId);
+  const assembled = await consumeResponsesStream(response, ctx.modelId, ctx.requestId);
   const usage = responseUsage(assembled);
   return gatewayJsonResponse(
     assembled,
@@ -1904,7 +2000,7 @@ async function handleMessagesToResponses(c: ProxyContext, body: ProxyRequest, ct
   }
 
   // Non-streaming: consume the Responses SSE stream, assemble final response
-  const assembled = await consumeResponsesStream(response, ctx.modelId);
+  const assembled = await consumeResponsesStream(response, ctx.modelId, ctx.requestId);
   const usage = responseUsage(assembled);
   return gatewayJsonResponse(
     assembled,
@@ -1954,7 +2050,7 @@ async function handleResponsesPassthrough(c: ProxyContext, body: ProxyRequest, c
   if (isSSE && !body.stream) {
     // Handler forced streaming (e.g. Codex) but client wants non-streaming response
     // Consume the SSE stream and assemble a complete Responses API response
-    const assembled = await consumeResponsesStream(response, ctx.modelId);
+    const assembled = await consumeResponsesStream(response, ctx.modelId, ctx.requestId);
     const usage = responseUsage(assembled);
     return gatewayJsonResponse(
       assembled,
@@ -2326,10 +2422,11 @@ function streamWithTranslation(
     sourceFormat: providerFormat,
     targetFormat: clientFormat,
     model: ctx.publicModelId ?? ctx.modelId,
+    toolContext: ctx.toolContext,
     requestId: ctx.requestId,
     toolSchemas: requestToolSchemas,
   });
-  const parseState: ProviderSseParseState = {};
+  const frameDecoder = new SseEventDecoder();
   const metrics: StreamUsageMetrics = { inputTokens: 0, outputTokens: 0 };
   let ttfbMs: number | null = null;
   let streamError: unknown = null;
@@ -2345,11 +2442,11 @@ function streamWithTranslation(
         if (ttfbMs === null && isMeaningfulSseLine(line, providerFormat)) {
           ttfbMs = Date.now() - ctx.startTime;
         }
-        const event = parseProviderSseLine(line, parseState);
+        const event = frameDecoder.push(line);
         if (!event) return false;
         updateStreamUsageMetrics(providerFormat, event, metrics);
         emitSelectedStreamLines(controller, selector.push(event).lines, encoder);
-        return selector.ended();
+        return selector.ended() || selector.failed();
       };
 
       try {
@@ -2374,6 +2471,8 @@ function streamWithTranslation(
         }
         if (!terminalEventObserved) {
           for (const line of decoder.finish()) processLine(line);
+          const tail = frameDecoder.finish();
+          if (tail) emitSelectedStreamLines(controller, selector.push(tail).lines, encoder);
         }
       } catch (error) {
         streamError = error;

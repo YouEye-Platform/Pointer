@@ -5,6 +5,7 @@ import type { ProviderManifest, IProviderHandler } from "./types";
 import codexHandler from "../../providers.d/_handlers/codex";
 import googleGeminiHandler from "../../providers.d/_handlers/google-gemini";
 import xaiGrokHandler from "../../providers.d/_handlers/xai-grok";
+import opencodeGoHandler from "../../providers.d/_handlers/opencode-go";
 
 const MANIFESTS_DIR = process.env.POINTER_PROVIDERS_DIR?.trim()
   || join(import.meta.dir, "../../providers.d");
@@ -13,6 +14,7 @@ const BUNDLED_HANDLERS: Readonly<Record<string, IProviderHandler>> = Object.free
   codex: codexHandler,
   "google-gemini": googleGeminiHandler,
   "xai-grok": xaiGrokHandler,
+  "opencode-go": opencodeGoHandler,
 });
 
 export async function loadManifests(): Promise<ProviderManifest[]> {

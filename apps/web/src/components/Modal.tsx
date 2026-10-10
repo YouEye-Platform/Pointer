@@ -12,28 +12,38 @@ export function Modal({
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
+  const capturedFocus = useRef(false);
+  if (!capturedFocus.current && typeof document !== "undefined") {
+    let focused = document.activeElement;
+    while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+    previousFocus.current = focused as HTMLElement | null;
+    capturedFocus.current = true;
+  }
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
+    const scope = dialog?.getRootNode() as Document | ShadowRoot;
+    const previous = previousFocus.current;
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(
       'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     ) ?? []);
     focusable()[0]?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
+      if (dialog && !event.composedPath().includes(dialog)) return;
       if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab") return;
       const elements = focusable();
       if (elements.length === 0) return;
       const first = elements[0];
       const last = elements[elements.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.shiftKey && scope?.activeElement === first) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && scope?.activeElement === last) {
         event.preventDefault();
         first.focus();
       }

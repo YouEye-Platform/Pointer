@@ -187,3 +187,34 @@ single-flight refresh, rotated-token preservation, terminal refresh quarantine, 
 covered by code and automated tests; an actual expiry remains an observational production check.
 There is no reactive retry when a still-valid token is invalidated early by the provider. Reconnect
 is the safe recovery until that behavior is implemented and tested.
+
+## OpenCode Go
+
+Select **OpenCode Go** in Providers → Add provider and enter the key from your
+Go subscription dashboard in that form. Pointer encrypts it using the existing
+account credential storage. Go uses `https://opencode.ai/zen/go/v1`; this is
+separate from other OpenCode billing products. No upstream fallback is activated.
+
+Inference clients must send a stable `x-opencode-session` conversation identifier.
+Pointer also recognizes native `session_id`, `x-session-id`, and
+`x-claude-code-session-id` headers. Keep the identifier through tool calls and
+continuation; use distinct identifiers for separate conversations and child
+threads. Missing or invalid identity returns `provider_session_required` before
+an upstream request. Pointer identifies itself using its own versioned user agent.
+
+Discovery joins the public Go inventory with the `opencode-go` provider metadata
+in models.dev. Model package metadata selects Chat Completions, Responses or
+Messages routing, with documented exact-ID protocol overrides where required.
+Unknown or deprecated metadata is excluded from selectable routing. Account
+information reports these IDs under `unsupportedModels`, together with source
+URLs and fetch time. Per-model raw metadata retains protocol/capability evidence.
+An unavailable metadata source fails discovery instead of inventing capabilities.
+
+Catalogue discovery is public and does not validate credentials or subscription
+entitlement. Connection Test explicitly reports that limitation; Model Test
+provides an authenticated inference check. Provider auth/quota errors remain
+subject to the gateway's existing sanitized error handling. No account balance
+or subscription usage estimate is fabricated.
+
+References: [OpenCode Go](https://opencode.ai/docs/go/) and
+[models.dev provider metadata](https://models.dev/api.json).

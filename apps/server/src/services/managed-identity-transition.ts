@@ -68,7 +68,18 @@ export async function transitionManagedIdentity(
       return "already-applied" as const;
     }
     if (integration.expected_issuer !== request.oldIssuer) throw new Error("Expected old managed issuer mismatch");
+    // External actors are keyed by issuer + stable subject. Retain their UUIDs
+    // (and therefore engine homes, groups, instances and keys) during a rename.
+    // The operation is exclusive to this integration; never merge two tenants.
+    await tx`LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`;
+    const [overlap] = await tx`SELECT id FROM platform_integrations WHERE id <> ${integration.id}
+      AND expected_issuer IN (${request.oldIssuer}, ${request.newIssuer}) LIMIT 1`;
+    const [destination] = await tx`SELECT id FROM users WHERE kind = 'external'
+      AND external_issuer = ${request.newIssuer} LIMIT 1`;
+    if (overlap || destination) throw new Error("Identity transition cannot merge existing actor domains");
     if (checkOnly) return "ready" as const;
+    const actors = await tx`UPDATE users SET external_issuer = ${request.newIssuer}, updated_at = now()
+      WHERE kind = 'external' AND external_issuer = ${request.oldIssuer} RETURNING id`;
     await tx`
       UPDATE platform_integrations SET expected_issuer = ${request.newIssuer}, updated_at = now(),
         last_authenticated_at = NULL, last_ready_at = NULL WHERE id = ${integration.id}
@@ -81,7 +92,7 @@ export async function transitionManagedIdentity(
       VALUES (${auditId}, ${auditId}, ${integration.id}, ${request.oldIssuer},
         'local-database-owner', 'platform.identity.transition', 'platform_integration',
         ${integration.id}, ${tx.json({ issuer: request.oldIssuer })},
-        ${tx.json({ issuer: request.newIssuer })}, 'success')
+        ${tx.json({ issuer: request.newIssuer, actorsRetained: actors.length })}, 'success')
     `;
     return "changed" as const;
   });

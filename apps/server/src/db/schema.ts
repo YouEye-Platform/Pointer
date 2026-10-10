@@ -90,7 +90,11 @@ export const providerAccounts = pgTable(
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     providerId: text("provider_id").notNull().references(() => providers.id, { onDelete: "restrict" }),
     nickname: text("nickname"),
+    // Non-secret selector in this owner's private OpenCodex configuration.
+    engineProvider: text("engine_provider"),
     baseUrl: text("base_url"),
+    capabilityOverrides: jsonb("capability_overrides").$type<import("../gateway/tool-capability").ModelCapabilityOverrides>().notNull().default({}),
+    wireCapabilities: jsonb("wire_capabilities").$type<import("../gateway/wire-capabilities").WireCapabilityOverrides>().notNull().default({}),
     status: text("status").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -100,6 +104,8 @@ export const providerAccounts = pgTable(
       .on(t.userId, t.nickname)
       .where(sql`${t.nickname} is not null`),
     index("idx_provider_accounts_user_provider").on(t.userId, t.providerId),
+    uniqueIndex("idx_provider_accounts_engine_provider").on(t.userId, t.engineProvider)
+      .where(sql`${t.engineProvider} is not null`),
     check("provider_accounts_status_check", sql`${t.status} in ('active', 'disabled', 'error')`),
   ]
 );
@@ -316,6 +322,8 @@ export const providerAccountModels = pgTable(
       .references(() => providerAccounts.id, { onDelete: "cascade" }),
     providerModelId: text("provider_model_id").notNull()
       .references(() => providerModels.id, { onDelete: "cascade" }),
+    rawMetadata: jsonb("raw_metadata"),
+    discoveredAt: timestamp("discovered_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -908,6 +916,7 @@ export const catalogGenerationAssets = pgTable(
 export const modelGroups = pgTable(
   "model_groups",
   {
+    routingCombos: jsonb("routing_combos").notNull().default([]),
     id: text("id").primaryKey(), // grp_<nanoid(12)>
     userId: text("user_id")
       .notNull()
@@ -1257,6 +1266,9 @@ export const usageLogs = pgTable(
   "usage_logs",
   {
     id: text("id").primaryKey(),
+    requestId: text("request_id"),
+    upstreamErrorCode: text("upstream_error_code"),
+    failureReceipt: jsonb("failure_receipt"),
     apiKeyId: text("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     userId: text("user_id").notNull().references(() => users.id),
     modelId: text("model_id").notNull(),
@@ -1293,6 +1305,7 @@ export const usageLogs = pgTable(
   },
   (t) => [
     index("idx_usage_user").on(t.userId),
+    index("idx_usage_request").on(t.requestId),
     index("idx_usage_created").on(t.createdAt),
     index("idx_usage_model").on(t.modelId),
     index("idx_usage_catalog_entity").on(t.catalogEntityId),

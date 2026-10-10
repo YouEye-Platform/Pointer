@@ -51,6 +51,27 @@ use ordinary Messages tools defined by `name`, `description`, and
 
 ## Translation guarantees
 
+Client tool-search results retain the complete ordered definitions returned for
+each call, including repeated and overlapping results on later turns. Catalog
+deduplication must never remove entries from a `tool_search_output`: an empty
+result means that particular search found no tools. Native Responses preserves
+namespaces, deferred-loading flags, call identity and result status. Deferred
+function declarations are accepted both at the top level and inside namespaces.
+Regression coverage includes continuation histories and an actual upstream HTTP
+capture for streamed and buffered callers.
+
+Retained history may contain older schemas after a tool/server update. Each
+search result keeps that historical revision. Current top-level declarations
+define the callable catalog; for history-only tools the latest revision wins.
+Conflicting duplicates within one catalog/result, or incompatible tool identity
+kinds, remain invalid. Schema evolution must not reject an otherwise valid
+continuation or rewrite the earlier search evidence.
+
+Rejected requests emit a bounded structural diagnostic in the server log:
+protocol pair, stable failure code, schema paths and whitelisted protocol field
+names/types only. Prompt text, tool names, argument values, unknown field names,
+headers and credentials are excluded. Public error bodies remain unchanged.
+
 Text order, role order, tool call/result correlation, JSON arguments, usage, finish reasons, and meaningful stream lifecycle are preserved when representable. Reasoning signatures and encrypted reasoning are never fabricated. Provider-specific extensions round-trip only in their source namespace and are explicitly dropped or rejected cross-format. A native Google route retains the complete validated GenerateContent payload. A Google request targeting another provider format uses a portable-field allowlist and rejects any unknown or Google-only input field before provider inference.
 
 For Chat Completions streams, a non-null `finish_reason` closes content but does
@@ -67,6 +88,23 @@ post-terminal data. OpenAI-compatible `delta.reasoning` is normalized to the
 public Chat `delta.reasoning_content` field.
 
 Unknown fields, authorization fields, malformed nested content, invalid tool schemas, non-finite JSON numbers, and orphan tool results are rejected with bounded validation details.
+
+Responses-to-Responses streams preserve ordinary and phased assistant messages,
+content-part indices, refusals and documented URL/file/container annotations.
+Incremental annotations and completed snapshots must agree on identity, text and
+previously observed citations. Completed message items remain available when an
+upstream sends a sparse terminal output; final-only annotations are retained.
+The existing response metadata allowlist also applies to created and terminal
+events, and outgoing Responses events receive consecutive sequence numbers.
+Cross-format text translation retains its existing boundary: Responses-native
+features that the target cannot represent remain explicit failures.
+
+Buffered clients consuming an upstream Responses stream use the same selector
+and terminal checks. EOF without an actual terminal is
+`pointer_stream_interrupted`, including after visible output; Pointer never
+manufactures a completed Responses result. SSE framing accepts comments,
+multiline data, LF/CRLF and fragmented UTF-8 while forwarding each complete
+event immediately.
 
 For native Anthropic Messages passthrough, Pointer forwards the caller's `anthropic-version` and
 optional `anthropic-beta` headers. JSON transport-only `anthropic-version` is removed from the body;
@@ -120,3 +158,15 @@ The Google compatibility boundary is the GenerateContent model inference family 
 CLI, including model discovery, token count, and native embeddings. It does not claim the Google
 Interactions, Live, Files, cache lifecycle, tuning, or job-control APIs. See
 [google-gemini-cli.md](./google-gemini-cli.md).
+
+### Opaque reasoning continuation through Messages
+
+When a Responses provider returns encrypted reasoning to a Messages client,
+Pointer carries the complete reasoning item in a versioned opaque
+`redacted_thinking.data` envelope. The next Messages tool-result request restores
+the original Responses item, including its identity, summary and ciphertext.
+Buffered and streamed responses use the same envelope. This does not decrypt
+state or manufacture a native thinking signature. Untagged native Messages
+ciphertext remains Messages-scoped; malformed envelopes and incompatible
+origins are rejected. Legacy translated ciphertext without an origin envelope
+cannot be safely relabelled and still fails cross-format replay.

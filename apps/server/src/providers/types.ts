@@ -32,6 +32,7 @@ export interface ProviderManifest {
     models?: string;
   };
   gateway?: {
+    wire?: import("../gateway/wire-capabilities").WireCapabilityOverrides;
     operations: {
       generate: {
         format: "chat-completions" | "messages" | "responses" | "google-generate-content";
@@ -111,6 +112,8 @@ export interface ProviderModelDiscovery {
    * Model discovery is always GET-only.
    */
   url?: string;
+  /** Optional same-origin additive capability discovery; absence never denies support. */
+  capabilitiesEndpoint?: string;
   query?: Record<string, string | number | boolean>;
   listPath?: string;
   idField?: string;
@@ -134,6 +137,8 @@ export interface ModelCapabilityFallback {
 
 export interface StaticModel {
   id: string;
+  wireCapabilities?: import("../gateway/wire-capabilities").WireCapabilityOverrides;
+  supportsReasoning?: boolean;
   name?: string;
   contextWindow?: number;
   maxOutput?: number;
@@ -190,6 +195,7 @@ export function refineProxyRequest(value: JsonObject): ProxyRequest {
 }
 
 export interface RequestContext {
+  providerSessionId?: string;
   requestId?: string;
   apiKeyId: string;
   userId: string;

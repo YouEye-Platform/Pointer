@@ -11,7 +11,7 @@ import { drainUsageWrites } from "../services/usage-telemetry";
 import { buildTestModelTargets } from "../services/test-model-targets";
 import { compareRecommended } from "../services/catalog-ranking";
 import { loadCatalog } from "./catalog";
-import proxyRoutes from "./proxy";
+import inferenceRoutes from "./inference";
 
 const app = new Hono<{ Variables: { user: AuthUser } }>();
 app.use("*", authMiddleware);
@@ -41,15 +41,15 @@ app.get("/targets", async (c) => {
     canonicalName: schema.modelCatalog.name,
   }).from(schema.providerAccountModels)
     .innerJoin(schema.providerAccounts, eq(schema.providerAccountModels.providerAccountId, schema.providerAccounts.id))
-    .innerJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
+    .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
     .innerJoin(schema.providerModels, eq(schema.providerAccountModels.providerModelId, schema.providerModels.id))
     .innerJoin(schema.providers, eq(schema.providerModels.providerId, schema.providers.id))
     .leftJoin(schema.modelCatalog, eq(schema.providerModels.canonicalModelId, schema.modelCatalog.modelId))
     .where(and(
       eq(schema.providerAccounts.userId, user.id),
       eq(schema.providerAccounts.status, "active"),
-      eq(schema.providers.status, "active"),
-      isNotNull(schema.providerModels.catalogEntityId)
+      or(isNotNull(schema.providerKeys.id), isNotNull(schema.providerAccounts.engineProvider)),
+      eq(schema.providers.status, "active")
     ));
 
   const catalog = await loadCatalog(user.id);
@@ -79,31 +79,29 @@ app.post("/", async (c) => {
   const [rawProviderModel] = await db.select().from(schema.providerModels).where(and(
       eq(schema.providerModels.providerId, providerId),
       eq(schema.providerModels.providerModelId, modelId),
-      isNotNull(schema.providerModels.catalogEntityId),
     )).limit(1);
-  const [legacyProviderModel] = rawProviderModel ? [] : await db.select().from(schema.providerModels).where(and(
+  const [namedProviderModel] = rawProviderModel ? [] : await db.select().from(schema.providerModels).where(and(
     eq(schema.providerModels.providerId, providerId),
-    isNotNull(schema.providerModels.catalogEntityId),
     or(
       eq(schema.providerModels.modelId, modelId),
       eq(schema.providerModels.canonicalModelId, modelId),
     ),
   )).limit(1);
-  const providerModel = rawProviderModel ?? legacyProviderModel;
+  const providerModel = rawProviderModel ?? namedProviderModel;
   if (!providerModel) return c.json({ error: "Model is not available from that provider" }, 404);
-  const [providerKey] = await db.select({ id: schema.providerKeys.id }).from(schema.providerKeys)
-    .innerJoin(schema.providerAccounts, eq(schema.providerAccounts.id, schema.providerKeys.providerAccountId))
+  const [account] = await db.select({ id: schema.providerAccounts.id }).from(schema.providerAccounts)
     .innerJoin(schema.providerAccountModels, and(
       eq(schema.providerAccountModels.providerAccountId, schema.providerAccounts.id),
       eq(schema.providerAccountModels.providerModelId, providerModel.id),
     ))
     .where(and(
-      eq(schema.providerKeys.userId, user.id),
-      eq(schema.providerKeys.providerId, providerId),
-      eq(schema.providerKeys.providerAccountId, providerAccountId),
+      eq(schema.providerAccounts.userId, user.ownerUserId),
+      eq(schema.providerAccounts.providerId, providerId),
+      eq(schema.providerAccounts.id, providerAccountId),
+      isNotNull(schema.providerAccounts.engineProvider),
       eq(schema.providerAccounts.status, "active"),
     )).limit(1);
-  if (!providerKey) return c.json({ error: "Provider credential is not configured" }, 400);
+  if (!account) return c.json({ error: "Provider connection is not configured" }, 400);
 
   const suffix = nanoid(12);
   const instanceId = `test_${suffix}`;
@@ -146,9 +144,10 @@ app.post("/", async (c) => {
 
   let response: Response;
   try {
-    response = await proxyRoutes.fetch(new Request("http://pointer.test/chat/completions", {
+    response = await inferenceRoutes.fetch(new Request("http://pointer.test/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+      signal: c.req.raw.signal,
+      headers: { "content-type": "application/json", "x-opencode-session": `pointer-test-${suffix}`, authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: providerModel.modelId,
         messages: [{ role: "user", content: prompt }],

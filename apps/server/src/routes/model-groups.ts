@@ -14,6 +14,8 @@ import {
   reservedModelAliasMessage,
 } from "../services/model-aliases";
 
+import { groupComboSchema } from "../services/group-combos";
+
 const app = new Hono<{ Variables: { user: AuthUser } }>();
 app.use("*", authMiddleware);
 app.use("*", async (c, next) => {
@@ -21,6 +23,36 @@ app.use("*", async (c, next) => {
   if (c.req.method !== "GET"
     && !c.req.path.endsWith("/set-default")
     && c.res.status < 400) invalidateModelResolutionCache();
+});
+
+app.get("/:id/routing", async c => {
+  const group = await ownedGroup(c.req.param("id"), c.get("user").id);
+  return group ? c.json({ combos: group.routingCombos }) : c.json({ error: "Group not found" }, 404);
+});
+app.put("/:id/routing", async c => {
+  const parsed = z.object({ combos: z.array(groupComboSchema).max(20) }).safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "Provide named failover or round-robin routes with group-entry targets" }, 400);
+  const combos = parsed.data.combos;
+  const result = await db.transaction(async tx => {
+    const group = await lockOwnedGroup(tx, c.req.param("id"), c.get("user").id);
+    if (!group) return { status: 404 as const, error: "Group not found" };
+    const entries = await tx.select().from(schema.modelGroupEntries).where(eq(schema.modelGroupEntries.groupId, group.id));
+    const names = new Set<string>();
+    for (const combo of combos) {
+      const name = normalizeModelLookupKey(combo.name);
+      if (names.has(name) || isReservedModelAlias(combo.name) || entries.some(entry => normalizeModelLookupKey(entry.alias || entry.modelId) === name))
+        return { status: 400 as const, error: "Routing names must be unique and cannot replace group model names or positional aliases" };
+      const conflict = await validatePublicModelName(tx, group.id, "", combo.name, undefined, false);
+      if ("error" in conflict) return { status: 400 as const, error: conflict.error };
+      names.add(name);
+      const ids = combo.targets.map(target => target.entryId);
+      if (new Set(ids).size !== ids.length || ids.some(id => !entries.some(entry => entry.id === id && entry.enabled && entry.providerAccountId)))
+        return { status: 400 as const, error: "Every target must be a distinct enabled entry in this group" };
+    }
+    await tx.update(schema.modelGroups).set({ routingCombos: combos }).where(eq(schema.modelGroups.id, group.id));
+    return { status: 200 as const, combos };
+  });
+  return c.json(result, result.status);
 });
 
 type GroupEntry = typeof schema.modelGroupEntries.$inferSelect;
@@ -115,6 +147,7 @@ async function validatePublicModelName(
   catalogEntityId: string,
   alias: string | null,
   excludeEntryId?: string,
+  includeRoutingRules = true,
 ) {
   const entries = await tx
     .select({
@@ -163,6 +196,12 @@ async function validatePublicModelName(
     const existingName = entry.alias || (entry.catalogEntityId ? names.get(entry.catalogEntityId) : null) || entry.modelId;
     return normalizeModelLookupKey(existingName) === publicKey;
   });
+  if (includeRoutingRules) {
+    const [group] = await tx.select({ routingCombos: schema.modelGroups.routingCombos }).from(schema.modelGroups).where(eq(schema.modelGroups.id, groupId)).limit(1);
+    const rules = groupComboSchema.array().safeParse(group?.routingCombos ?? []);
+    if (rules.success && rules.data.some(rule => normalizeModelLookupKey(rule.name) === publicKey))
+      return { error: `Public model name “${publicName}” is already used by group routing`, code: "model_name_conflict" as const };
+  }
   if (conflict) {
     return {
       error: `Public model name “${publicName}” is already used in this group`,
@@ -209,7 +248,7 @@ async function resolveSelectableRoute(
   const accounts = await tx
     .select({ id: schema.providerAccounts.id })
     .from(schema.providerAccounts)
-    .innerJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
+    .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
     .innerJoin(schema.providerAccountModels, and(
       eq(schema.providerAccountModels.providerAccountId, schema.providerAccounts.id),
       eq(schema.providerAccountModels.providerModelId, route.providerModelKey),
@@ -218,6 +257,7 @@ async function resolveSelectableRoute(
       eq(schema.providerAccounts.userId, userId),
       eq(schema.providerAccounts.providerId, route.providerId),
       eq(schema.providerAccounts.status, "active"),
+      sql`(${schema.providerKeys.id} is not null or ${schema.providerAccounts.engineProvider} is not null)`,
       ...(requestedAccountId ? [eq(schema.providerAccounts.id, requestedAccountId)] : []),
     ))
     .orderBy(asc(schema.providerAccounts.createdAt), asc(schema.providerAccounts.id))
@@ -237,10 +277,11 @@ async function enrichEntries(entries: GroupEntry[], userId: string) {
     db.select().from(schema.providers).where(inArray(schema.providers.id, providerIds)),
     db.select({ id: schema.providerAccounts.id, providerId: schema.providerAccounts.providerId, nickname: schema.providerAccounts.nickname })
       .from(schema.providerAccounts)
-      .innerJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
+      .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
       .where(and(
         eq(schema.providerAccounts.userId, userId),
         eq(schema.providerAccounts.status, "active"),
+        sql`(${schema.providerKeys.id} is not null or ${schema.providerAccounts.engineProvider} is not null)`,
         inArray(schema.providerAccounts.providerId, providerIds),
       )),
     db.select({
@@ -248,10 +289,11 @@ async function enrichEntries(entries: GroupEntry[], userId: string) {
       providerModelId: schema.providerAccountModels.providerModelId,
     }).from(schema.providerAccountModels)
       .innerJoin(schema.providerAccounts, eq(schema.providerAccounts.id, schema.providerAccountModels.providerAccountId))
-      .innerJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
+      .leftJoin(schema.providerKeys, eq(schema.providerKeys.providerAccountId, schema.providerAccounts.id))
       .where(and(
         eq(schema.providerAccounts.userId, userId),
         eq(schema.providerAccounts.status, "active"),
+        sql`(${schema.providerKeys.id} is not null or ${schema.providerAccounts.engineProvider} is not null)`,
         inArray(schema.providerAccounts.providerId, providerIds),
       )),
     db.select({ id: schema.catalogGenerations.id }).from(schema.catalogGenerations)

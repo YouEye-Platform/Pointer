@@ -314,7 +314,7 @@ export function parseToolChoice(
       format === "responses"
       && value.type === "function"
       && typeof value.name === "string"
-      && Object.keys(value).every((key) => key === "type" || key === "name")
+      && Object.keys(value).every((key) => key === "type" || key === "name" || key === "namespace")
     ) {
       return { choice: { type: "function", name: value.name }, findings };
     }

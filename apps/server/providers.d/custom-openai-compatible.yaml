@@ -23,6 +23,7 @@ gateway:
 models:
   discovery:
     enabled: true
+    capabilitiesEndpoint: /models/capabilities
     listPath: data
     idField: id
     nameField: name

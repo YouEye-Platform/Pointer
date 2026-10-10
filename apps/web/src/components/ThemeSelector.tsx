@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getHostRuntime } from "../lib/host-runtime";
 
 export type ThemeMode = "light" | "dark" | "system";
 const STORAGE_KEY = "pointer_theme";
@@ -18,6 +19,7 @@ export function ThemeSelector() {
   const [mode, setMode] = useState<ThemeMode>("system");
 
   useEffect(() => {
+    if (getHostRuntime()) return;
     const saved = localStorage.getItem(STORAGE_KEY);
     const initial: ThemeMode = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
     setMode(initial);
@@ -37,6 +39,8 @@ export function ThemeSelector() {
     setMode(next);
     applyTheme(next);
   }
+
+  if (getHostRuntime()) return null;
 
   return (
     <fieldset className="theme-selector" aria-label="Color theme">

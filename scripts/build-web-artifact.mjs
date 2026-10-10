@@ -44,6 +44,9 @@ command("pnpm", ["--filter", "@pointer/web", "prepare:standalone"]);
 const standalone = resolve(web, ".next/standalone");
 requirePath(standalone, "Next standalone output");
 cpSync(standalone, stage, { recursive: true });
+for (const notice of ["LICENSE", "NOTICE.md", "third-party"]) {
+  cpSync(resolve(root, notice), resolve(stage, notice), { recursive: true });
+}
 
 function makeLinksPortable(directory) {
   for (const name of readdirSync(directory)) {

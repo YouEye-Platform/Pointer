@@ -36,6 +36,19 @@ export default function ModelsPage() {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [defaultGroup, setDefaultGroup] = useState<GroupDetail | null>(null);
   const [groupError, setGroupError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshNotice, setRefreshNotice] = useState("");
+  async function refreshEvidence() {
+    setRefreshing(true); setRefreshNotice("");
+    try {
+      const result = await api.post<{ results: Array<{ status: string; sourceId: string }> }>("/api/sources/refresh", {});
+      const failed = result.results.filter(row => row.status === "error").map(row => row.sourceId);
+      setRefreshNotice(failed.length ? `Refreshed available evidence. Sources unavailable: ${failed.join(", ")}. Previous evidence is retained.` : "Model metadata and benchmark evidence refreshed.");
+      setRefreshVersion(value => value + 1);
+    } catch (reason) { setRefreshNotice(reason instanceof Error ? reason.message : "Evidence refresh failed."); }
+    finally { setRefreshing(false); }
+  }
 
   const loadGroups = useCallback(async () => {
     setGroupError("");
@@ -87,7 +100,7 @@ export default function ModelsPage() {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [deferredSearch, availability, capability, creator, provider, sort, order, page]);
+  }, [deferredSearch, availability, capability, creator, provider, sort, order, page, refreshVersion]);
 
   useEffect(() => setPage(1), [deferredSearch, availability, capability, creator, provider, sort, order]);
 
@@ -101,9 +114,8 @@ export default function ModelsPage() {
     <div>
       <div className="spread page-head">
         <div>
-          <p className="eyebrow">Canonical catalog</p>
           <h1>Models</h1>
-          <p className="muted">Every provider model, one stable identity, source-specific evidence. Default order is a normalized consensus across available general benchmarks.</p>
+          <p className="muted">Explore models across providers and add your choices to groups.</p>
         </div>
         <div className="segmented" aria-label="Model view">
           <button type="button" className={view === "table" ? "active" : ""} onClick={() => setView("table")}>Table</button>
@@ -118,6 +130,7 @@ export default function ModelsPage() {
         </div>
       )}
       {error && <div className="notice danger" role="alert">{error}</div>}
+      <div className="spread"><button disabled={refreshing} onClick={() => void refreshEvidence()}>{refreshing ? "Refreshing evidence…" : "Refresh benchmarks and metadata"}</button>{refreshNotice && <p role="status">{refreshNotice}</p>}</div>
       {groupError && <div className="notice warning" role="alert">Model group controls are unavailable: {groupError}. <button className="btn-sm" onClick={() => void loadGroups()}>Retry</button></div>}
 
       <div className="catalog-controls card">

@@ -12,13 +12,14 @@ const change = { oldIssuer: 'https://id.old.test', newIssuer: 'https://id.new.te
 
 async function fixture() {
   const id = 'rename-test-' + randomUUID();
+  const request = { ...change, oldIssuer: change.oldIssuer + '/' + id, newIssuer: change.newIssuer + '/' + id, integrationId: id };
   await sql`INSERT INTO users (id, kind, name, role, state) VALUES (${id}, 'service', 'Preserve owner', 'admin', 'active')`;
   await sql`INSERT INTO platform_integrations
     (id, kind, external_server_id, owner_user_id, expected_issuer, expected_audience, expected_subject)
-    VALUES (${id}, 'youeye', ${id}, ${id}, ${change.oldIssuer}, ${change.audience}, ${change.subject})`;
+    VALUES (${id}, 'youeye', ${id}, ${id}, ${request.oldIssuer}, ${change.audience}, ${change.subject})`;
   await sql`INSERT INTO model_groups (id, user_id, name) VALUES (${id}, ${id}, 'Preserve group')`;
   fixtures.push(id);
-  return { ...change, integrationId: id };
+  return request;
 }
 
 describe.skipIf(!enabled)('database-owner managed identity transitions', () => {
@@ -42,11 +43,11 @@ describe.skipIf(!enabled)('database-owner managed identity transitions', () => {
     const before = await sql`SELECT * FROM model_groups WHERE id = ${request.integrationId}`;
     expect(await transitionManagedIdentity(sql, database, request, true)).toBe('ready');
     const [old] = await sql`SELECT expected_issuer FROM platform_integrations WHERE id = ${request.integrationId}`;
-    expect(old.expected_issuer).toBe(change.oldIssuer);
+    expect(old.expected_issuer).toBe(request.oldIssuer);
     expect(await transitionManagedIdentity(sql, database, request, false)).toBe('changed');
     expect(await transitionManagedIdentity(sql, database, request, false)).toBe('already-applied');
     const [row] = await sql`SELECT * FROM platform_integrations WHERE id = ${request.integrationId}`;
-    expect(row.expected_issuer).toBe(change.newIssuer);
+    expect(row.expected_issuer).toBe(request.newIssuer);
     expect(row.owner_user_id).toBe(request.integrationId);
     expect([...(await sql`SELECT * FROM model_groups WHERE id = ${request.integrationId}`)]).toEqual([...before]);
     expect((await sql`SELECT * FROM management_audit WHERE integration_id = ${request.integrationId}`).length).toBe(1);
@@ -61,7 +62,31 @@ describe.skipIf(!enabled)('database-owner managed identity transitions', () => {
     await sql`UPDATE platform_integrations SET state = 'disabled' WHERE id = ${request.integrationId}`;
     await expect(transitionManagedIdentity(sql, database, request, false)).rejects.toThrow();
     const [row] = await sql`SELECT expected_issuer FROM platform_integrations WHERE id = ${request.integrationId}`;
-    expect(row.expected_issuer).toBe(change.oldIssuer);
+    expect(row.expected_issuer).toBe(request.oldIssuer);
+  });
+  test('domain rename retains external actor UUIDs, disabled state and group ownership; conflicting identity fails closed', async () => {
+    const request = await fixture();
+    const actor = request.integrationId + '-actor';
+    await sql`INSERT INTO users (id, kind, name, role, state, external_issuer, external_subject)
+      VALUES (${actor}, 'external', 'Existing person', 'user', 'disabled', ${request.oldIssuer}, ${actor})`;
+    await sql`INSERT INTO model_groups (id, user_id, name) VALUES (${actor}, ${actor}, 'Personal group')`;
+    fixtures.push(actor);
+    expect(await transitionManagedIdentity(sql, database, request, true)).toBe('ready');
+    const [before] = await sql`SELECT external_issuer FROM users WHERE id = ${actor}`;
+    expect(before.external_issuer).toBe(request.oldIssuer);
+    expect(await transitionManagedIdentity(sql, database, request, false)).toBe('changed');
+    const [person] = await sql`SELECT id, state, external_issuer, external_subject FROM users WHERE id = ${actor}`;
+    expect(person).toMatchObject({ id: actor, state: 'disabled', external_issuer: request.newIssuer, external_subject: actor });
+    const [group] = await sql`SELECT user_id FROM model_groups WHERE id = ${actor}`;
+    expect(group.user_id).toBe(actor);
+    expect(await transitionManagedIdentity(sql, database, { ...request, oldIssuer: request.newIssuer, newIssuer: request.oldIssuer }, false)).toBe('changed');
+    const conflict = request.integrationId + '-conflict';
+    await sql`INSERT INTO users (id, kind, name, role, external_issuer, external_subject)
+      VALUES (${conflict}, 'external', 'Separate person', 'user', ${request.newIssuer}, ${actor})`;
+    fixtures.push(conflict);
+    await expect(transitionManagedIdentity(sql, database, request, false)).rejects.toThrow('merge');
+    const [unchanged] = await sql`SELECT external_issuer FROM users WHERE id = ${actor}`;
+    expect(unchanged.external_issuer).toBe(request.oldIssuer);
   });
   test('disabled owner is rejected and concurrent identical requests commit once', async () => {
     const request = await fixture();
@@ -77,9 +102,9 @@ describe.skipIf(!enabled)('database-owner managed identity transitions', () => {
     const results = await Promise.allSettled([transitionManagedIdentity(sql, database, request, false), transitionManagedIdentity(sql, database, other, false)]);
     expect(results.filter(r => r.status === 'fulfilled').length).toBe(1);
     const [row] = await sql`SELECT expected_issuer FROM platform_integrations WHERE id = ${request.integrationId}`;
-    expect(await transitionManagedIdentity(sql, database, { ...request, oldIssuer: row.expected_issuer, newIssuer: change.oldIssuer }, false)).toBe('changed');
+    expect(await transitionManagedIdentity(sql, database, { ...request, oldIssuer: row.expected_issuer, newIssuer: request.oldIssuer }, false)).toBe('changed');
     const [restored] = await sql`SELECT expected_issuer FROM platform_integrations WHERE id = ${request.integrationId}`;
-    expect(restored.expected_issuer).toBe(change.oldIssuer);
+    expect(restored.expected_issuer).toBe(request.oldIssuer);
   });
   test('a runtime role without database ownership cannot authorize a transition', async () => {
     const request = await fixture();
@@ -87,6 +112,11 @@ describe.skipIf(!enabled)('database-owner managed identity transitions', () => {
     await sql.unsafe(`CREATE ROLE ${role}`);
     const restricted = createPostgresClient(url, 1);
     try {
+      const [principal] = await sql`SELECT current_user AS name, current_setting('server_version_num')::int AS version`;
+      // PostgreSQL 16+ does not implicitly grant SET ROLE to a CREATEROLE
+      // fixture owner. This grant belongs only to the disposable negative test.
+      if (principal.version >= 160000) await sql`GRANT ${sql(role)} TO ${sql(principal.name)} WITH SET TRUE`;
+      else await sql`GRANT ${sql(role)} TO ${sql(principal.name)}`;
       await restricted.unsafe(`SET ROLE ${role}`);
       await expect(transitionManagedIdentity(restricted, database, request, false)).rejects.toThrow('database owner');
     } finally {

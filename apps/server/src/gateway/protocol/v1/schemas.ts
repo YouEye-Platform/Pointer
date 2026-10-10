@@ -118,6 +118,8 @@ export const irReasoningBlockSchema = z
     id: stableIdSchema.optional(),
     signature: z.string().optional(),
     encryptedContent: z.string().optional(),
+    encryptedSourceFormat: gatewayApiFormatSchema.optional(),
+    summary: z.array(z.object({ type: z.literal("summary_text"), text: z.string() }).strict()).optional(),
   })
   .strict();
 
@@ -136,6 +138,9 @@ export const irToolCallBlockSchema = z
     name: nonEmptyStringSchema,
     arguments: jsonValueSchema,
     rawArguments: z.string().optional(),
+    inputKind: z.enum(["json", "text"]).optional(),
+    toolKind: z.literal("tool_search").optional(),
+    namespace: nonEmptyStringSchema.optional(),
     itemId: stableIdSchema.optional(),
     cacheControl: cacheControlSchema.optional(),
     providerMetadata: jsonObjectSchema.optional(),
@@ -148,6 +153,8 @@ export const irToolResultBlockSchema = z
     callId: stableIdSchema,
     output: jsonValueSchema,
     isError: z.boolean().default(false),
+    inputKind: z.enum(["json", "text"]).optional(),
+    toolKind: z.literal("tool_search").optional(),
     id: stableIdSchema.optional(),
     cacheControl: cacheControlSchema.optional(),
   })
@@ -161,6 +168,16 @@ export const irExtensionBlockSchema = z
   })
   .strict();
 
+export const irToolDeclarationBlockSchema = z.object({
+  type: z.literal("tool_declaration"),
+  source: z.enum(["additional_tools", "tool_search_output"]),
+  tools: z.array(jsonObjectSchema),
+  wireMetadata: jsonObjectSchema.optional(),
+  id: stableIdSchema.optional(),
+  callId: stableIdSchema.optional(),
+  role: z.enum(["system", "developer"]).optional(),
+}).strict();
+
 export const irContentBlockSchema = z.discriminatedUnion("type", [
   irTextBlockSchema,
   irImageBlockSchema,
@@ -171,6 +188,7 @@ export const irContentBlockSchema = z.discriminatedUnion("type", [
   irToolCallBlockSchema,
   irToolResultBlockSchema,
   irExtensionBlockSchema,
+  irToolDeclarationBlockSchema,
 ]);
 export type IrContentBlock = z.infer<typeof irContentBlockSchema>;
 
@@ -189,6 +207,13 @@ export const irFunctionToolSchema = z
     name: nonEmptyStringSchema,
     description: z.string().optional(),
     parameters: jsonObjectSchema,
+    inputKind: z.enum(["json", "text"]).optional(),
+    toolKind: z.literal("tool_search").optional(),
+    format: jsonObjectSchema.optional(),
+    namespace: nonEmptyStringSchema.optional(),
+    namespaceDescription: z.string().optional(),
+    declarationSource: z.enum(["top", "deferred"]).optional(),
+    deferLoading: z.boolean().optional(),
     strict: z.boolean().optional(),
     cacheControl: cacheControlSchema.optional(),
   })
@@ -213,7 +238,7 @@ export const irToolChoiceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("none") }).strict(),
   z.object({ type: z.literal("required") }).strict(),
   z
-    .object({ type: z.literal("function"), name: nonEmptyStringSchema })
+    .object({ type: z.literal("function"), name: nonEmptyStringSchema, namespace: nonEmptyStringSchema.optional(), inputKind: z.enum(["json", "text"]).optional() })
     .strict(),
 ]);
 export type IrToolChoice = z.infer<typeof irToolChoiceSchema>;
@@ -222,7 +247,7 @@ export const irReasoningControlSchema = z
   .object({
     enabled: z.boolean(),
     adaptive: z.boolean().optional(),
-    effort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+    effort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).optional(),
     budgetTokens: nonNegativeIntegerSchema.optional(),
     summary: z.enum(["auto", "concise", "detailed", "none"]).optional(),
   })
@@ -275,7 +300,7 @@ export const irRequestSchema = z
     toolChoice: irToolChoiceSchema.optional(),
     parallelToolCalls: z.boolean().optional(),
     reasoning: irReasoningControlSchema.optional(),
-    outputEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+    outputEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).optional(),
     responseFormat: irResponseFormatSchema.optional(),
     sampling: irSamplingSchema,
   })
@@ -350,15 +375,15 @@ const irEventBaseFields = {
 
 export const irStreamEventSchema = z.discriminatedUnion("type", [
   z.object({ ...irEventBaseFields, type: z.literal("responses_native_event"), event: z.string(), data: jsonObjectSchema }).strict(),
-  z.object({ ...irEventBaseFields, type: z.literal("response_start") }).strict(),
+  z.object({ ...irEventBaseFields, type: z.literal("response_start"), responsesMetadata: jsonObjectSchema.optional() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("content_start"), index: nonNegativeIntegerSchema, block: irContentBlockSchema }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("text_delta"), index: nonNegativeIntegerSchema, delta: z.string() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("reasoning_delta"), index: nonNegativeIntegerSchema, delta: z.string() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("tool_call_start"), index: nonNegativeIntegerSchema, callId: stableIdSchema, itemId: stableIdSchema.optional(), name: nonEmptyStringSchema, providerMetadata: jsonObjectSchema.optional() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("tool_arguments_delta"), index: nonNegativeIntegerSchema, callId: stableIdSchema, delta: z.string() }).strict(),
-  z.object({ ...irEventBaseFields, type: z.literal("content_end"), index: nonNegativeIntegerSchema }).strict(),
+  z.object({ ...irEventBaseFields, type: z.literal("content_end"), index: nonNegativeIntegerSchema, block: irReasoningBlockSchema.optional() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("usage"), usage: irUsageSchema }).strict(),
-  z.object({ ...irEventBaseFields, type: z.literal("response_end"), finishReason: irFinishReasonSchema, rawFinishReason: z.string().optional() }).strict(),
+  z.object({ ...irEventBaseFields, type: z.literal("response_end"), finishReason: irFinishReasonSchema, rawFinishReason: z.string().optional(), responsesMetadata: jsonObjectSchema.optional(), responsesMessageSnapshots: z.array(z.object({ index: nonNegativeIntegerSchema, item: jsonObjectSchema }).strict()).optional() }).strict(),
   z.object({ ...irEventBaseFields, type: z.literal("error"), error: irErrorSchema }).strict(),
 ]);
 export type IrStreamEvent = z.infer<typeof irStreamEventSchema>;

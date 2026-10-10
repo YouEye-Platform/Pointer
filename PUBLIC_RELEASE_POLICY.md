@@ -3,8 +3,8 @@
 ## Scope
 
 This policy applies only to the Pointer server repository and its headless
-YouEye-managed `standalone.tar`. It does not authorize, package, or publish
-Pointer Web or any other release product.
+YouEye-managed `standalone.tar`. The managed artifact includes the shared host React UI module and its notices.
+It excludes the standalone Pointer Web server and other release products.
 
 ## Preconditions
 
@@ -28,13 +28,8 @@ non-canonical source identity rather than guessing from a private remote.
 
 ## Legal materials
 
-This repository does not currently establish a Pointer product license,
-copyright owner, or trademark policy. Do not infer those terms from another
-YouEye repository. The tracked icon notice under
-`apps/web/public/icons/brands/NOTICE.txt` applies only to that optional Web
-asset set and is not added to the headless server package.
-
-Adding `LICENSE`, `TRADEMARK.md`, and `THIRD_PARTY_NOTICES.txt` to the managed
-standalone package requires a rights-holder decision and approved Pointer-owned
-files. Do not add a new rights claim, third-party asset, or broad approval
-without that review.
+Preserve the Pointer-owned `LICENSE`, `NOTICE.md` and tracked `third-party`
+materials in the managed artifact. The shared UI includes approved fonts and
+brand assets with their notices. Inspect those exact tracked notices; do not
+infer rights from another YouEye repository or add new rights claims. A new
+third-party asset or uncertain redistribution right requires its own review.

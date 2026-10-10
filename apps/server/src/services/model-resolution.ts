@@ -1,7 +1,12 @@
+import { groupComboSchema, groupComboId } from "./group-combos";
+import { registry } from "../providers/registry";
+import { persistedToolCapability, toolCapability, toolCapabilityValue, type ToolCapability } from "../gateway/tool-capability";
+import { wireCapabilityOverridesSchema, type WireCapabilityOverrides } from "../gateway/wire-capabilities";
 import { db, schema } from "../db";
 import { eq, and, asc, inArray, isNotNull } from "drizzle-orm";
 import { isModelAllowed, type ApiKeyContext } from "../middleware/api-key";
 import {
+  isReservedModelAlias,
   POSITIONAL_MODEL_ALIASES,
   RESERVED_MODEL_ALIASES,
   normalizeManualModelAlias,
@@ -14,6 +19,8 @@ export type ModelEntry = {
   providerId: string;
   providerAccountId: string | null;
   providerModelId: string;
+  engineSelector?: string | null;
+  combo?: { id: string; strategy: "failover" | "round-robin"; targets: Array<{ route: ModelEntry; weight: number }> };
   catalogEntityId: string | null;
   nativeFormat: "chat-completions" | "messages" | "responses" | "google-generate-content" | null;
   nativeEndpoint: string | null;
@@ -22,9 +29,11 @@ export type ModelEntry = {
   inputPrice: number | null;
   outputPrice: number | null;
   providerMethods: string[];
+  wireCapabilities?: WireCapabilityOverrides;
+  capabilityEvidence?: { tools: ToolCapability };
   capabilities: {
     streaming: boolean;
-    tools: boolean;
+    tools: boolean | null;
     vision: boolean;
     reasoning: boolean;
   };
@@ -276,6 +285,7 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
   // 1. Get instance's model group
   const [inst] = await db
     .select({
+      userId: schema.instances.userId,
       modelGroupId: schema.instances.modelGroupId,
       origin: schema.instances.origin,
       state: schema.instances.state,
@@ -285,10 +295,11 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
     .limit(1);
 
   // 2. Load group entries (ordered by position)
-  let groupEntries: { modelId: string; providerId: string; providerAccountId: string | null; providerModelKey: string | null; alias: string | null; position: number | null }[] = [];
+  let groupEntries: { id: string; modelId: string; providerId: string; providerAccountId: string | null; providerModelKey: string | null; alias: string | null; position: number | null }[] = [];
   if (inst?.modelGroupId) {
     groupEntries = await db
       .select({
+        id: schema.modelGroupEntries.id,
         modelId: schema.modelGroupEntries.modelId,
         providerId: schema.modelGroupEntries.providerId,
         providerAccountId: schema.modelGroupEntries.providerAccountId,
@@ -356,8 +367,25 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
       .from(schema.providerModels)
       .where(and(
         inArray(schema.providerModels.providerId, [...allProviderIds]),
-        isNotNull(schema.providerModels.catalogEntityId)
+        ...(inst?.origin === "managed" ? [isNotNull(schema.providerModels.catalogEntityId)] : [])
       ));
+  }
+
+  // Account discovery is endpoint-scoped: two compatible endpoints may report the
+  // same model ID with different tool semantics. Never borrow their evidence.
+  const accountIds = [...new Set([...groupEntries, ...allInstanceModels]
+    .map(row => row.providerAccountId).filter((id): id is string => Boolean(id)))];
+  const accountOverrides = new Map<string, { tools?: boolean; observedAt: string }>();
+  const accountEvidence = new Map<string, { rawMetadata: unknown; discoveredAt: Date | null }>();
+  if (accountIds.length) {
+    const accounts = await db.select({ id: schema.providerAccounts.id, overrides: schema.providerAccounts.capabilityOverrides, updatedAt: schema.providerAccounts.updatedAt })
+      .from(schema.providerAccounts).where(inArray(schema.providerAccounts.id, accountIds));
+    for (const account of accounts) accountOverrides.set(account.id, { ...account.overrides, observedAt: account.updatedAt.toISOString() });
+    const evidence = await db.select({ accountId: schema.providerAccountModels.providerAccountId,
+      modelId: schema.providerAccountModels.providerModelId, rawMetadata: schema.providerAccountModels.rawMetadata,
+      discoveredAt: schema.providerAccountModels.discoveredAt })
+      .from(schema.providerAccountModels).where(inArray(schema.providerAccountModels.providerAccountId, accountIds));
+    for (const row of evidence) accountEvidence.set(`${row.accountId}:${row.modelId}`, row);
   }
 
   const lookupPM = buildProviderModelLookup(allPMs);
@@ -372,12 +400,23 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
       }
     }
 
+    const accountModel = pm?.id && providerAccountId ? accountEvidence.get(`${providerAccountId}:${pm.id}`) : undefined;
+    const raw = accountModel?.rawMetadata ?? pm?.rawMetadata;
+    const manifest = registry.getProvider(providerId)?.manifest;
+    const fallback = manifest?.models?.capabilityFallbacks?.find(row =>
+      row.modelId.toLowerCase() === (pm?.providerModelId ?? modelId).toLowerCase())?.supportsTools;
+    const observedAt = accountModel?.discoveredAt?.toISOString() ?? null;
+    const override = providerAccountId ? accountOverrides.get(providerAccountId)?.tools : undefined;
+    const tools = typeof override === "boolean" ? toolCapability(override, "endpoint.override", accountOverrides.get(providerAccountId!)?.observedAt ?? null)
+      : persistedToolCapability(raw, accountModel?.rawMetadata != null ? null : pm?.supportsTools ?? cat?.supportsTools, fallback, observedAt);
     return {
       displayName,
       modelId,
       providerId,
       providerAccountId: providerAccountId ?? null,
       providerModelId: pm?.providerModelId || modelId,
+      engineSelector: typeof (raw as { engineSelector?: unknown } | null)?.engineSelector === "string"
+        ? (raw as { engineSelector: string }).engineSelector : null,
       catalogEntityId: pm?.catalogEntityId ?? null,
       nativeFormat: normalizeNativeFormat(pm?.nativeFormat),
       nativeEndpoint: pm?.nativeEndpoint ?? null,
@@ -386,11 +425,13 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
       inputPrice: pm?.inputPrice != null ? Number(pm.inputPrice) : null,
       outputPrice: pm?.outputPrice != null ? Number(pm.outputPrice) : null,
       providerMethods: providerMethods(pm?.rawMetadata),
+      wireCapabilities: (() => { const metadata = raw as { wireCapabilities?: unknown } | undefined; const parsed = wireCapabilityOverridesSchema.safeParse(metadata?.wireCapabilities); return parsed.success ? parsed.data : {}; })(),
+      capabilityEvidence: { tools },
       capabilities: {
         streaming: pm?.supportsStreaming ?? cat?.supportsStreaming ?? true,
-        tools: (pm?.supportsTools || cat?.supportsTools) ?? false,
+        tools: toolCapabilityValue(tools),
         vision: pm?.supportsVision ?? cat?.supportsVision ?? false,
-        reasoning: cat?.isReasoning ?? false,
+        reasoning: typeof (pm?.rawMetadata as {supportsReasoning?: unknown})?.supportsReasoning === "boolean" ? (pm!.rawMetadata as {supportsReasoning: boolean}).supportsReasoning : cat?.isReasoning ?? false,
       },
     };
   }
@@ -446,6 +487,33 @@ export async function buildInstanceModelIndex(instanceId: string): Promise<Insta
   }
 
   const index = buildModelIndex(pending, groupEntries);
+  if (inst?.modelGroupId) {
+    const [group] = await db.select().from(schema.modelGroups).where(and(eq(schema.modelGroups.id, inst.modelGroupId), eq(schema.modelGroups.userId, inst.userId))).limit(1);
+    const parsed = groupComboSchema.array().safeParse(group?.routingCombos ?? []);
+    if (parsed.success) for (const combo of parsed.data) {
+      const targets = combo.targets.map(target => {
+        const entry = groupEntries.find(entry => entry.id === target.entryId);
+        const route = entry && pending.find(item => item.modelId === entry.modelId && item.providerId === entry.providerId && item.providerAccountId === entry.providerAccountId)?.entry;
+        return route?.engineSelector ? { route, weight: target.weight } : null;
+      }).filter((target): target is { route: ModelEntry; weight: number } => target !== null);
+      if (!targets.length) continue;
+      const valid = targets;
+      const name = normalizeModelLookupKey(combo.name);
+      if (index.routesByName.has(name) || isReservedModelAlias(combo.name)) continue;
+      const id = groupComboId(inst.userId, inst.modelGroupId, combo.name);
+      const entry: ModelEntry = { ...valid[0]!.route, displayName: combo.name,
+        modelId: `combo/${id}`, catalogEntityId: null, engineSelector: `combo/${id}`,
+        combo: { id, strategy: combo.strategy, targets: valid },
+        contextWindow: valid.every(target => target.route.contextWindow !== null) ? Math.min(...valid.map(target => target.route.contextWindow!)) : null,
+        maxOutput: valid.every(target => target.route.maxOutput !== null) ? Math.min(...valid.map(target => target.route.maxOutput!)) : null,
+        inputPrice: null, outputPrice: null, nativeFormat: null, nativeEndpoint: null,
+        wireCapabilities: undefined, capabilityEvidence: undefined,
+        providerMethods: valid[0]!.route.providerMethods.filter(method => valid.every(target => target.route.providerMethods.includes(method))),
+        capabilities: { ...valid[0]!.route.capabilities,
+          vision: valid.every(target => target.route.capabilities.vision), tools: valid.some(target => target.route.capabilities.tools === false) ? false : valid.every(target => target.route.capabilities.tools === true) ? true : null } };
+      index.routesByName.set(name, entry); index.advertisedModels.push(entry);
+    }
+  }
   instanceLookupCache.set(instanceId, { index, builtAt: Date.now() });
   return index;
 }
@@ -470,10 +538,13 @@ export async function resolveModel(
   | "providerId"
   | "providerAccountId"
   | "providerModelId"
+  | "engineSelector"
+  | "combo"
   | "catalogEntityId"
   | "nativeFormat"
   | "nativeEndpoint"
   | "providerMethods"
+  | "wireCapabilities"
   | "contextWindow"
   | "maxOutput"
   | "capabilities"
@@ -488,10 +559,13 @@ export async function resolveModel(
       providerId: entry.providerId,
       providerAccountId: entry.providerAccountId,
       providerModelId: entry.providerModelId,
+      engineSelector: entry.engineSelector,
+      combo: entry.combo,
       catalogEntityId: entry.catalogEntityId,
       nativeFormat: entry.nativeFormat,
       nativeEndpoint: entry.nativeEndpoint,
       providerMethods: entry.providerMethods,
+      wireCapabilities: entry.wireCapabilities,
       contextWindow: entry.contextWindow,
       maxOutput: entry.maxOutput,
       capabilities: entry.capabilities,

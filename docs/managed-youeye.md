@@ -115,9 +115,10 @@ model's human name; it never exposes provider account IDs or nicknames.
 
 When several owned accounts can serve the same provider route, management must
 supply `providerAccountId`; Pointer never picks one implicitly and never falls
-back to a different account after an upstream error. Custom base URLs must be
-public HTTPS URLs, resolve only to public addresses when saved, and are
-revalidated before use.
+back to a different account after an upstream error. Custom base URLs use public HTTPS by default. An installation can enable local
+HTTP/HTTPS with `POINTER_ALLOW_LOCAL_ENDPOINTS=true`; account ownership, metadata
+address blocks, pinned DNS, verified TLS and redirect refusal still apply. See
+[endpoint capabilities](gateway-capabilities.md).
 
 Model availability is also account-specific. Each successful complete sync
 replaces that account's provider-model mapping, while the shared catalog keeps

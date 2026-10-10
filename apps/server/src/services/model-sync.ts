@@ -1,3 +1,5 @@
+import { recordDiscoveredToolEvidence } from "../gateway/tool-capability";
+import { invalidateModelResolutionCache } from "./model-resolution";
 import { db, schema } from "../db";
 import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -19,6 +21,7 @@ export async function syncProviderModels(providerId: string, userId?: string, ac
   if (!resolved) return 0;
   const synced = await syncSingleProvider(resolved, userId, accountId);
   if (synced > 0) await scheduleCanonicalCatalogSync();
+  if (synced > 0) invalidateModelResolutionCache();
   return synced;
 }
 
@@ -28,6 +31,7 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
   let synced = 0;
   let inventoryComplete = true;
   const observedModelIds = new Set<string>();
+  const discoveredMetadata = new Map<string, unknown>();
 
   try {
     // Get an API key (use dbRecord.id for multi-instance support)
@@ -56,6 +60,19 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
       accountId
     );
 
+    const previousMetadata = new Map<string, unknown>();
+    const previousRows = accountId
+      ? await db.select({ modelId: schema.providerModels.providerModelId, raw: schema.providerAccountModels.rawMetadata })
+        .from(schema.providerAccountModels).innerJoin(schema.providerModels, eq(schema.providerModels.id, schema.providerAccountModels.providerModelId))
+        .where(eq(schema.providerAccountModels.providerAccountId, accountId))
+      : await db.select({ modelId: schema.providerModels.providerModelId, raw: schema.providerModels.rawMetadata })
+        .from(schema.providerModels).where(eq(schema.providerModels.providerId, dbRecord.id));
+    for (const row of previousRows) previousMetadata.set(row.modelId, row.raw);
+    const evidenceModel = (model: any, id: string | null) => {
+      const fallback = manifest.models?.capabilityFallbacks?.find((row: any) => row.modelId.toLowerCase() === id?.toLowerCase())?.supportsTools;
+      return recordDiscoveredToolEvidence(model, id ? previousMetadata.get(id) : null, fallback);
+    };
+
     // 1. Try API-based discovery first
     if (manifest.models?.discovery?.enabled || manifest.endpoints?.models) {
       let models: any[] = [];
@@ -75,9 +92,10 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
 
       if (models.length > 0) {
         console.log(`[sync] ${dbRecord.id}: found ${models.length} models via discovery`);
-        for (const model of models) {
-          const modelId = discoveredModelId(model, manifest);
-          if (modelId) observedModelIds.add(modelId);
+        for (const incoming of models) {
+          const modelId = discoveredModelId(incoming, manifest);
+          const model = evidenceModel(incoming, modelId);
+          if (modelId) { observedModelIds.add(modelId); discoveredMetadata.set(modelId, model); }
           synced += await upsertModel(model, manifest, dbRecord);
         }
       } else if (manifest.models?.discovery?.enabled || manifest.endpoints?.models) {
@@ -90,22 +108,25 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
     if (manifest.models?.static?.length > 0) {
       console.log(`[sync] ${dbRecord.id}: inserting ${manifest.models.static.length} static models`);
       for (const staticModel of manifest.models.static) {
-        const model = {
+        const model = evidenceModel({
           id: staticModel.id,
           name: staticModel.name || staticModel.id,
           description: staticModel.description || null,
           context_length: staticModel.contextWindow,
           maxOutput: staticModel.maxOutput,
-          supportsTools: staticModel.supportsTools ?? false,
+          supportsTools: staticModel.supportsTools,
           supportsVision: staticModel.supportsVision ?? false,
           supportsStreaming: staticModel.supportsStreaming ?? true,
           supportedGenerationMethods: staticModel.supportedGenerationMethods,
           nativeFormat: staticModel.nativeFormat,
+          wireCapabilities: staticModel.wireCapabilities,
+          supportsReasoning: staticModel.supportsReasoning,
           nativeEndpoint: staticModel.nativeEndpoint,
           inputPrice: staticModel.inputPrice,
           outputPrice: staticModel.outputPrice,
-        };
+        }, staticModel.id);
         observedModelIds.add(staticModel.id);
+        discoveredMetadata.set(staticModel.id, model);
         synced += await upsertModel(model, { ...manifest, models: { discovery: null } }, dbRecord);
       }
     }
@@ -124,6 +145,8 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
               id: `pam_${nanoid(16)}`,
               providerAccountId: accountId,
               providerModelId: row.id,
+              rawMetadata: discoveredMetadata.get(row.providerModelId) ?? discoveredMetadata.get(row.modelId) ?? row.rawMetadata,
+              discoveredAt: new Date(),
             }))).onConflictDoNothing();
           }
         });
@@ -189,6 +212,7 @@ async function syncSingleProvider(resolved: { manifest: any; handler: any; dbRec
       .where(eq(schema.providers.id, dbRecord.id));
   }
 
+  if (synced > 0) invalidateModelResolutionCache();
   return synced;
 }
 
@@ -336,7 +360,7 @@ async function upsertModel(model: any, manifest: any, dbRecord: any): Promise<nu
       nativeFormat: nativeFormat ?? existingMapping[0].nativeFormat,
       nativeEndpoint: nativeEndpoint ?? existingMapping[0].nativeEndpoint,
     };
-    if (supportsTools && !existingMapping[0].supportsTools) pmUpdates.supportsTools = true;
+    pmUpdates.supportsTools = supportsTools;
     if (supportsVision && !existingMapping[0].supportsVision) pmUpdates.supportsVision = true;
     await db
       .update(schema.providerModels)

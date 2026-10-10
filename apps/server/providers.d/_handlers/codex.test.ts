@@ -42,6 +42,25 @@ function tokenWithAccountClaim(field: "chatgpt_account_id" | "account_id", value
 }
 
 describe("Codex provider operation endpoint", () => {
+  test("preserves declared reasoning levels without inferring them from model names", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => Response.json({ models: [
+      { slug: "opaque-reasoning-model", supported_reasoning_levels: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }, { effort: "xhigh" }, { effort: "max" }, { effort: "ultra" }, { effort: "medium" }, { effort: "unknown-future-label" }] },
+      { slug: "opaque-string-levels", supported_reasoning_levels: ["none", "low"] },
+      { slug: "opaque-no-reasoning", supported_reasoning_levels: [] },
+      { slug: "opaque-unknown-capability" },
+    ] })) as typeof fetch;
+    try {
+      const models = await handler.fetchModels!(manifest, "opaque-token");
+      expect(models[0]).toMatchObject({ supportsReasoning: true, wireCapabilities: { reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"] } });
+      expect(models[1]).toMatchObject({ supportsReasoning: true, wireCapabilities: { reasoningEfforts: ["none", "low"] } });
+      expect(models[2].supportsReasoning).toBe(false);
+      expect(models[2].wireCapabilities).toBeUndefined();
+      expect(models[3].supportsReasoning).toBeUndefined();
+      expect(models[3].wireCapabilities).toBeUndefined();
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
   test("supports the generic account-scoped device authorization contract", async () => {
     const originalFetch = globalThis.fetch;
     const requests: Request[] = [];
@@ -187,9 +206,20 @@ describe("Codex provider operation endpoint", () => {
     const requests: Request[] = [];
     const apiKey = tokenWithAccountClaim("chatgpt_account_id", "workspace-current");
     globalThis.fetch = (async (input, init) => {
-      requests.push(new Request(input, init));
+      const request = new Request(input, init);
+      requests.push(request);
+      // The backend still returns a healthy older catalog for old/unversioned
+      // clients; connection success alone cannot prove new-model discovery.
+      const current = new URL(request.url).searchParams.get("client_version") === "0.159.2";
       return Response.json({
-        models: [{ slug: "gpt-fixture", display_name: "GPT Fixture" }],
+        models: [
+          { slug: "gpt-fixture", display_name: "GPT Fixture" },
+          { slug: "gpt-6-sol", display_name: "GPT-6-Sol" },
+          { slug: "gpt-6-luna", display_name: "GPT-6-Luna" },
+          ...(current ? [
+            { slug: "gpt-6.1-sol", display_name: "GPT-6.1-Sol" },
+          ] : []),
+        ],
       });
     }) as typeof fetch;
 
@@ -202,6 +232,9 @@ describe("Codex provider operation endpoint", () => {
       });
       await expect(handler.fetchModels!(manifest, apiKey)).resolves.toEqual([
         expect.objectContaining({ id: "gpt-fixture", name: "GPT Fixture" }),
+        expect.objectContaining({ id: "gpt-6-sol", name: "GPT-6-Sol" }),
+        expect.objectContaining({ id: "gpt-6-luna", name: "GPT-6-Luna" }),
+        expect.objectContaining({ id: "gpt-6.1-sol", name: "GPT-6.1-Sol" }),
       ]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -209,7 +242,7 @@ describe("Codex provider operation endpoint", () => {
 
     expect(requests).toHaveLength(2);
     for (const request of requests) {
-      expect(new URL(request.url).searchParams.get("client_version")).toBe("0.0.0");
+      expect(new URL(request.url).searchParams.get("client_version")).toBe("0.159.2");
       expect(request.headers.get("authorization")).toBe(`Bearer ${apiKey}`);
       expect(request.headers.get("oai-product-sku")).toBe("codex");
       expect(request.headers.get("chatgpt-account-id")).toBe("workspace-current");
