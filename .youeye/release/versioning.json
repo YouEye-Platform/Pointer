@@ -1,0 +1,7 @@
+{
+  "schema": "youeye.release-versioning.v1",
+  "product": "Pointer",
+  "grammar": "X.Y.Z[-token.N]",
+  "base": "next-stable",
+  "group": []
+}

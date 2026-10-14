@@ -50,18 +50,21 @@ product identity. Keep environment-specific deployment histories in private
 operator documentation. Schema IDs identify published schema documents; changes
 must preserve schema constraints and be checked against consumers.
 
-## Development version baseline
+## Release version identity
 
-Before the next release, align each component's development version with its
-latest published Stable base and choose an unused six-position development
-iteration (for example, `0.5.1.0.0.1` after Stable `0.5.1`). Never lower a
-component already on a newer base. A public snapshot can advance its release
-version without advancing the development branch automatically; compare source
-content separately from version numbers. Keep all registered version authorities
-consistent. Existing release locks describe real published inputs: do not replace
-their versions, tags or hashes with values for artifacts that do not exist.
+New releases use `X.Y.Z[-token.N]`, retaining all three numeric positions.
+Development targets the next Stable base: after `0.5.3`, use
+`0.5.4-dev.N`; private main uses `alpha.N`, public Beta uses `beta.N`, and
+feature releases use a collision-checked branch token with a numeric counter.
+The exact case-sensitive Git branch remains separate from the display token.
+Select source/channel before comparing versions; `.10` follows `.9`.
 
-Source preparation does not require a Development release. The release workflow
-merges reviewed development source, assigns the destination version, then builds
-and publishes only when explicitly started. Private Alpha uses five positions;
-public Stable uses three. A source-only task must not create tags or releases.
+The release coordinator reserves identities with a stable request key before
+building. Retry the same frozen attempt; never repurpose a used identity or
+rewrite historical tags, locks or artifact versions. Failed attempts may leave
+gaps. Source-only preparation does not start builds or publication, and the
+existing branch/merge workflow remains in effect.
+
+This product retains its own version sequence; it is not numbered from the
+YouEye core release group. Keep every registered source version authority
+consistent. Unchanged published payloads retain their original provenance.

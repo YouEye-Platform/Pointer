@@ -3,13 +3,17 @@ import { resolve } from "node:path";
 import { PUBLIC_CANONICAL_REPOSITORY, buildSourceRepository } from "./release-identity.mjs";
 import { LATEST_POINTER_SCHEMA_VERSION } from "../apps/server/src/db/latest-schema.mjs";
 
+import { isReleaseVersion, isHistoricalVersion, validateReleaseBranch } from "./release-version.mjs";
+
 const output = process.argv[2];
 if (!output) throw new Error("output directory is required");
 const commit = process.env.YOUEYE_SOURCE_COMMIT || "";
 const branch = process.env.YOUEYE_SOURCE_BRANCH || "detached";
+if (branch !== "detached") validateReleaseBranch(branch);
 const sourceRepository = buildSourceRepository(process.env.YOUEYE_SOURCE_REPOSITORY);
 if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("exact source commit is required");
 const pkg = JSON.parse(readFileSync(resolve("apps/server/package.json"), "utf8"));
+if (!isReleaseVersion(pkg.version) && !isHistoricalVersion(pkg.version)) throw new Error("invalid Pointer release identity");
 writeFileSync(resolve(output, "release-manifest.json"), `${JSON.stringify({
   schemaVersion: 1,
   component: "pointer",
