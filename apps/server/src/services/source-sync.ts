@@ -13,6 +13,7 @@ import {
   hasBenchmarkCredential,
 } from "./benchmark-credentials";
 import { sourceTtlMs } from "./sources/config";
+import { catalogInventoryHash } from "./catalog-reconciliation-core";
 import { stageSourceInventorySnapshot } from "./catalog-reconciliation";
 import {
   SourceFetchError,
@@ -64,18 +65,25 @@ export class PostgresSourceSnapshotStore implements SourceSnapshotStore {
   async replace(snapshot: SourceSnapshot<SourceRecord>, at: Date) {
     await db.transaction(async (tx) => {
       await stageSourceInventorySnapshot(tx, snapshot, at);
-      await tx.delete(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, snapshot.sourceId));
-      for (let offset = 0; offset < snapshot.records.length; offset += 250) {
-        const values = snapshot.records.slice(offset, offset + 250).map((record) => ({
-          id: nanoid(),
-          sourceId: snapshot.sourceId,
-          recordKey: "id" in record ? record.id : `${record.benchmarkId}:${record.sourceModelId ?? record.sourceModel}`,
-          kind: "id" in record ? "reference_model" : "benchmark",
-          payload: record,
-          provenance: snapshot.provenance,
-          fetchedAt: new Date(snapshot.provenance.fetchedAt),
-        }));
-        await tx.insert(schema.sourceRecords).values(values);
+      const previous = await tx.select({ payload: schema.sourceRecords.payload })
+        .from(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, snapshot.sourceId));
+      const changed = catalogInventoryHash(previous.map(row => row.payload)) !== catalogInventoryHash(snapshot.records);
+      // Keep unchanged records and their original observation provenance. The
+      // source-state row records the latest successful validation separately.
+      if (changed) {
+        await tx.delete(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, snapshot.sourceId));
+        for (let offset = 0; offset < snapshot.records.length; offset += 250) {
+          const values = snapshot.records.slice(offset, offset + 250).map((record) => ({
+            id: nanoid(),
+            sourceId: snapshot.sourceId,
+            recordKey: "id" in record ? record.id : `${record.benchmarkId}:${record.sourceModelId ?? record.sourceModel}`,
+            kind: "id" in record ? "reference_model" : "benchmark",
+            payload: record,
+            provenance: snapshot.provenance,
+            fetchedAt: new Date(snapshot.provenance.fetchedAt),
+          }));
+          await tx.insert(schema.sourceRecords).values(values);
+        }
       }
       await tx.update(schema.sourceSyncStates).set({
         status: "ok",
@@ -122,13 +130,13 @@ export class SourceSyncCoordinator {
     return [...this.adapters.keys()];
   }
 
-  refresh(sourceId: string): Promise<SourceSnapshot<SourceRecord> | null> {
+  refresh(sourceId: string, maxAgeMs = 0): Promise<SourceSnapshot<SourceRecord> | null> {
     const existing = this.inFlight.get(sourceId);
     if (existing) return existing;
     const adapter = this.adapters.get(sourceId);
     if (!adapter) return Promise.reject(new SourceFetchError(`Unknown source: ${sourceId}`, "malformed"));
 
-    const refresh = this.runRefresh(adapter).finally(() => this.inFlight.delete(sourceId));
+    const refresh = this.runRefresh(adapter, maxAgeMs).finally(() => this.inFlight.delete(sourceId));
     this.inFlight.set(sourceId, refresh);
     return refresh;
   }
@@ -143,8 +151,8 @@ export class SourceSyncCoordinator {
     return snapshot;
   }
 
-  async refreshAll() {
-    const results = await Promise.allSettled(this.sourceIds().map((sourceId) => this.refresh(sourceId)));
+  async refreshAll(maxAgeMs = 0) {
+    const results = await Promise.allSettled(this.sourceIds().map((sourceId) => this.refresh(sourceId, maxAgeMs)));
     return results.map((result, index) => ({ sourceId: this.sourceIds()[index], result }));
   }
 
@@ -168,10 +176,17 @@ export class SourceSyncCoordinator {
     });
   }
 
-  private async runRefresh(adapter: SourceAdapter<SourceRecord>) {
+  private async runRefresh(adapter: SourceAdapter<SourceRecord>, maxAgeMs: number) {
     if (adapter.enabled && !(await adapter.enabled())) {
       await this.store.markDisabled(adapter.id, this.now());
       return null;
+    }
+    // Scheduled work honors persisted freshness across process restarts.
+    // Explicit user refresh retains force-refresh semantics (maxAgeMs = 0).
+    if (maxAgeMs > 0) {
+      const current = (await this.store.listStates()).find(row => row.sourceId === adapter.id);
+      const age = current?.lastSuccessAt ? this.now().getTime() - current.lastSuccessAt.getTime() : Infinity;
+      if (current?.status === "ok" && current.recordCount > 0 && age >= 0 && age < Math.min(maxAgeMs, this.ttlMs)) return null;
     }
     const attemptedAt = this.now();
     await this.store.markAttempt(adapter.id, attemptedAt);

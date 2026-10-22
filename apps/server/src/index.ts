@@ -22,9 +22,9 @@ async function startup() {
   await registry.initialize();
   await ensureManagedIntegration();
 
-  const refreshSources = async (): Promise<boolean> => {
+  const refreshSources = async (maxAgeMs: number): Promise<boolean> => {
     try {
-      const results = await sourceSync.refreshAll();
+      const results = await sourceSync.refreshAll(maxAgeMs);
       let failed = false;
       for (const { sourceId, result } of results) {
         if (result.status === "rejected") {
@@ -50,7 +50,7 @@ async function startup() {
       let interval = 6 * 60 * 60 * 1000;
       try {
         const settings = await operationalSettings(); interval = settings.sourceRefreshHours * 60 * 60 * 1000;
-        const successful = await refreshSources(); failures = successful ? 0 : failures + 1;
+        const successful = await refreshSources(interval); failures = successful ? 0 : failures + 1;
       } catch { failures++; console.error("[sources] Scheduled refresh failed"); }
       finally { setTimeout(() => void run(), sourceRefreshDelayMs(interval, failures)).unref(); }
     };
@@ -90,7 +90,7 @@ async function startup() {
     if (now >= nextSourceRefreshAt && !sourceRefreshRunning) {
       sourceRefreshRunning = true;
       try {
-        const successful = await refreshSources();
+        const successful = await refreshSources(settings.sourceRefreshHours * 60 * 60 * 1000);
         sourceRefreshFailures = successful ? 0 : sourceRefreshFailures + 1;
         nextSourceRefreshAt = Date.now() + sourceRefreshDelayMs(
           settings.sourceRefreshHours * 60 * 60 * 1000,

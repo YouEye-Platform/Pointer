@@ -6,41 +6,65 @@ import { registry } from "../providers/registry";
 import { normalizeModelAggressive, normalizeModelLight } from "./model-identity";
 import { planCanonicalCatalog, type ProviderModelInput } from "./catalog-planner";
 import type { NormalizedBenchmarkRecord, NormalizedReferenceModel } from "./sources/types";
-import { scheduleCatalogReconciliation } from "./catalog-reconciliation";
+import { catalogContentHash, catalogInventoryHash } from "./catalog-reconciliation-core";
+import { acquireCatalogWriteLock, scheduleCatalogReconciliation } from "./catalog-reconciliation";
 
 export async function syncCanonicalCatalog() {
-  const [referenceRows, benchmarkRows, providerRows] = await Promise.all([
-    db.select({ payload: schema.sourceRecords.payload }).from(schema.sourceRecords).where(eq(schema.sourceRecords.kind, "reference_model")),
-    db.select({ payload: schema.sourceRecords.payload }).from(schema.sourceRecords).where(eq(schema.sourceRecords.kind, "benchmark")),
-    db.select({ model: schema.providerModels, providerName: schema.providers.name })
-      .from(schema.providerModels)
-      .innerJoin(schema.providers, eq(schema.providers.id, schema.providerModels.providerId)),
-  ]);
-  const references = referenceRows.map((row) => row.payload as NormalizedReferenceModel);
-  const benchmarks = benchmarkRows.map((row) => row.payload as NormalizedBenchmarkRecord);
-  const providerModels: ProviderModelInput[] = providerRows.map(({ model, providerName }) => ({
-    id: model.id,
-    providerId: model.providerId,
-    providerName,
-    rawModelId: model.providerModelId,
-    catalogIdentity: resolveProviderModelCatalogIdentity(
-      model.rawMetadata,
-      registry.getProvider(model.providerId)?.manifest
-    ),
-    displayName: model.displayName,
-    existingModelId: model.modelId,
-    inputPrice: model.inputPrice,
-    outputPrice: model.outputPrice,
-    contextWindow: model.contextWindow,
-    maxOutput: model.maxOutput,
-    supportsTools: model.supportsTools ?? false,
-    supportsVision: model.supportsVision ?? false,
-    supportsStreaming: model.supportsStreaming ?? false,
-  }));
-  const plan = planCanonicalCatalog(references, providerModels, benchmarks);
-  const syncedAt = new Date();
+  const plan = await db.transaction(async (tx) => {
+    await acquireCatalogWriteLock(tx);
+    const [referenceRows, benchmarkRows, providerRows] = await Promise.all([
+      tx.select({ payload: schema.sourceRecords.payload }).from(schema.sourceRecords).where(eq(schema.sourceRecords.kind, "reference_model")),
+      tx.select({ payload: schema.sourceRecords.payload }).from(schema.sourceRecords).where(eq(schema.sourceRecords.kind, "benchmark")),
+      tx.select({ model: schema.providerModels, providerName: schema.providers.name })
+        .from(schema.providerModels)
+        .innerJoin(schema.providers, eq(schema.providers.id, schema.providerModels.providerId)),
+    ]);
+    const references = referenceRows.map((row) => row.payload as NormalizedReferenceModel);
+    const benchmarks = benchmarkRows.map((row) => row.payload as NormalizedBenchmarkRecord);
+    const providerModels: ProviderModelInput[] = providerRows.map(({ model, providerName }) => ({
+      id: model.id,
+      providerId: model.providerId,
+      providerName,
+      rawModelId: model.providerModelId,
+      catalogIdentity: resolveProviderModelCatalogIdentity(
+        model.rawMetadata,
+        registry.getProvider(model.providerId)?.manifest
+      ),
+      displayName: model.displayName,
+      existingModelId: model.modelId,
+      inputPrice: model.inputPrice,
+      outputPrice: model.outputPrice,
+      contextWindow: model.contextWindow,
+      maxOutput: model.maxOutput,
+      supportsTools: model.supportsTools ?? false,
+      supportsVision: model.supportsVision ?? false,
+      supportsStreaming: model.supportsStreaming ?? false,
+    }));
+    const plan = planCanonicalCatalog(references, providerModels, benchmarks);
+    const syncedAt = new Date();
 
-  await db.transaction(async (tx) => {
+    const fingerprint = catalogContentHash({
+      algorithm: "legacy-projection-v1",
+      references: catalogInventoryHash(references),
+      benchmarks: catalogInventoryHash(benchmarks),
+      providers: catalogInventoryHash(providerModels),
+    });
+    const fingerprintKey = "internal_catalog_projection_fingerprint";
+    const [previous] = await tx.select().from(schema.systemSettings).where(eq(schema.systemSettings.key, fingerprintKey));
+    if (previous?.value === fingerprint) {
+      // Provider discovery can upgrade these two legacy fields independently
+      // of the projection. An unchanged input hash must not suppress repair of
+      // that drift; all other projection fields have a single writer here.
+      const capabilities = await tx.select({ id: schema.modelCatalog.modelId,
+        tools: schema.modelCatalog.supportsTools, vision: schema.modelCatalog.supportsVision,
+      }).from(schema.modelCatalog);
+      const byId = new Map(capabilities.map(row => [row.id, row]));
+      if (plan.models.every(model => {
+        const actual = byId.get(model.id);
+        return actual && actual.tools === model.supportsTools && actual.vision === model.supportsVision;
+      })) return plan;
+    }
+
     // Source refreshes can remove or rename a model while the historical
     // model_catalog row remains referenced by usage and other retained data.
     // Release every prior deep-link claim inside this transaction before the
@@ -121,6 +145,9 @@ export async function syncCanonicalCatalog() {
         fetchedAt: new Date(benchmark.provenance.fetchedAt),
       })));
     }
+    await tx.insert(schema.systemSettings).values({ key: fingerprintKey, value: fingerprint, updatedAt: syncedAt })
+      .onConflictDoUpdate({ target: schema.systemSettings.key, set: { value: fingerprint, updatedAt: syncedAt } });
+    return plan;
   });
 
   let reconciliation: { status: "active"; generationId: string } | { status: "failed"; error: string };

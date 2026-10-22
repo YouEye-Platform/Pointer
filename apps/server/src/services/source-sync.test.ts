@@ -157,3 +157,28 @@ describe("SourceSyncCoordinator", () => {
     expect((await coordinator.states())[0]).toMatchObject({ status: "disabled", stale: false, error: null });
   });
 });
+
+
+test("scheduled refresh honors persisted freshness after restart, but force and expiry still fetch", async () => {
+  const { SourceSyncCoordinator } = await import("./source-sync");
+  const store = new FakeStore();
+  let now = new Date("2026-07-10T00:00:00Z");
+  let calls = 0;
+  const source = adapter("source-a", async () => { calls++; return snapshot("source-a"); });
+  const first = new SourceSyncCoordinator(new Map([[source.id, source]]), store as any, () => now, 60_000);
+  await first.refresh("source-a");
+  const restarted = new SourceSyncCoordinator(new Map([[source.id, source]]), store as any, () => now, 60_000);
+  await restarted.refreshAll(60_000);
+  expect(calls).toBe(1);
+  await restarted.refresh("source-a");
+  expect(calls).toBe(2);
+  now = new Date(now.getTime() + 60_001);
+  await Promise.all([restarted.refreshAll(60_000), restarted.refreshAll(60_000)]);
+  expect(calls).toBe(3);
+  store.states.get("source-a").status = "error";
+  await restarted.refreshAll(60_000);
+  expect(calls).toBe(4);
+  now = new Date(now.getTime() - 120_000);
+  await restarted.refreshAll(60_000);
+  expect(calls).toBe(5);
+});

@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "../db";
 import { assertCatalogPostgresTestDatabase } from "./catalog-postgres-test-safety";
 import { syncCanonicalCatalog } from "./catalog-sync";
+import { PostgresSourceSnapshotStore } from "./source-sync";
 import type { NormalizedReferenceModel } from "./sources/types";
 
 const integrationTest = process.env.CATALOG_POSTGRES_TEST === "1" ? test : test.skip;
@@ -41,6 +42,7 @@ describe("legacy catalog projection PostgreSQL integration", () => {
   beforeAll(async () => {
     if (process.env.CATALOG_POSTGRES_TEST !== "1") return;
     assertCatalogPostgresTestDatabase();
+    await db.delete(schema.systemSettings).where(eq(schema.systemSettings.key, "internal_catalog_projection_fingerprint"));
     await db.execute(sql`truncate table
       source_records,
       source_sync_states,
@@ -64,6 +66,45 @@ describe("legacy catalog projection PostgreSQL integration", () => {
       canonicalSlug: sharedSlug,
       name: "Stale Model",
     });
+  });
+
+  integrationTest("identical persisted inputs preserve legacy rows and alias identities", async () => {
+    await syncCanonicalCatalog();
+    const first = await db.select().from(schema.modelCatalog);
+    const aliases = await db.select().from(schema.modelAliases);
+    await syncCanonicalCatalog();
+    expect(await db.select().from(schema.modelCatalog)).toEqual(first);
+    expect(await db.select().from(schema.modelAliases)).toEqual(aliases);
+  });
+
+  integrationTest("unchanged source validation preserves rows while content changes replace them", async () => {
+    const store = new PostgresSourceSnapshotStore();
+    const first = await db.select().from(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, sourceId));
+    const at = new Date("2026-10-22T00:00:00Z");
+    const refreshedProvenance = { ...provenance, fetchedAt: at.toISOString() };
+    await store.replace({ sourceId, provenance: refreshedProvenance,
+      records: [{ ...reference, provenance: refreshedProvenance }] }, at);
+    expect(await db.select().from(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, sourceId))).toEqual(first);
+    const [state] = await db.select().from(schema.sourceSyncStates).where(eq(schema.sourceSyncStates.sourceId, sourceId));
+    expect(state.lastSuccessAt).toEqual(at);
+    await store.replace({ sourceId, provenance: refreshedProvenance,
+      records: [{ ...reference, description: "Changed content", provenance: refreshedProvenance }] }, at);
+    const changed = await db.select().from(schema.sourceRecords).where(eq(schema.sourceRecords.sourceId, sourceId));
+    expect(changed).toHaveLength(1);
+    expect(changed[0].id).not.toBe(first[0].id);
+    await syncCanonicalCatalog();
+    const [projected] = await db.select().from(schema.modelCatalog).where(eq(schema.modelCatalog.modelId, currentModelId));
+    expect(projected.description).toBe("Changed content");
+  });
+
+  integrationTest("unchanged input still repairs capability drift from provider discovery", async () => {
+    await syncCanonicalCatalog();
+    const [before] = await db.select().from(schema.modelCatalog).where(eq(schema.modelCatalog.modelId, currentModelId));
+    await db.update(schema.modelCatalog).set({ supportsVision: !before.supportsVision })
+      .where(eq(schema.modelCatalog.modelId, currentModelId));
+    await syncCanonicalCatalog();
+    const [after] = await db.select().from(schema.modelCatalog).where(eq(schema.modelCatalog.modelId, currentModelId));
+    expect(after.supportsVision).toBe(before.supportsVision);
   });
 
   afterAll(async () => {

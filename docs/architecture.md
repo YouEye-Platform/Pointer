@@ -67,5 +67,30 @@ Both artifacts are built from the same clean commit. Each contains
 sidecar. Health/version responses expose component, version, repository,
 branch, commit and build time so mixed releases can be detected.
 
+The source-owned `.youeye/release/artifact-promotion.json` declaration also
+requires the publisher to attach signed product build and release metadata.
+YouEye can then verify the complete Pointer release through its protected
+release cache before publication and retain an installed product receipt.
+The native archive and its signed checksum envelope remain available to older
+readers. This packaging declaration changes neither the database schema nor the
+application payload contract; it does not require reinstalling Pointer.
+
 Endpoint wire profiles and reversible semantic tools are documented in
 [gateway capabilities](gateway-capabilities.md).
+
+## Catalog refresh cost
+
+Scheduled source refreshes reuse the last successful persisted observation until
+the configured refresh interval or source TTL expires, including after restart.
+Explicit refresh still fetches immediately. Failed, empty, future-dated or stale
+observations cannot suppress a fetch. Concurrent refreshes of one source share
+one attempt.
+
+Successful unchanged inventories retain their source rows and original
+observation provenance while advancing the separate validation timestamp. The
+legacy catalog projection compares a versioned content fingerprint under the
+catalog write lock; identical inputs preserve model/alias/benchmark rows after checking the capability
+fields that provider discovery can independently change. Changed
+inputs replace the projection atomically. Generation reconciliation still runs
+after an unchanged projection so a prior failed generation can recover. No new
+database schema or installer migration is required.
