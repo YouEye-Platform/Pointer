@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
@@ -16,6 +18,8 @@ export function ModelGroupStar({
   defaultGroup: GroupDetail | null;
   onChanged: () => Promise<void>;
 }) {
+  const translateInterface = usePointerTranslations();
+
   const [open, setOpen] = useState(false);
   const [groupId, setGroupId] = useState("");
   const [group, setGroup] = useState<GroupDetail | null>(null);
@@ -95,7 +99,7 @@ export function ModelGroupStar({
         ? `${existing.providerModelKey}\u0000${existing.providerAccountId}`
         : (availableRoutes.length === 1 ? availableRoutes[0].value : ""));
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to load group");
+      setError(translateInterface("Failed to load group"));
     } finally {
       setGroupLoading(false);
     }
@@ -124,7 +128,7 @@ export function ModelGroupStar({
       await onChanged();
       close();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to update group");
+      setError(translateInterface("Failed to update group"));
     } finally {
       setBusy(false);
     }
@@ -139,7 +143,7 @@ export function ModelGroupStar({
       await onChanged();
       close();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to remove model");
+      setError(translateInterface("Failed to remove model"));
     } finally {
       setBusy(false);
     }
@@ -153,27 +157,27 @@ export function ModelGroupStar({
         type="button"
         className={`model-star ${starred ? "starred" : ""}`}
         aria-pressed={starred}
-        aria-label={`${starred ? "Manage" : "Add"} ${model.name} ${starred ? `in ${defaultGroup?.name ?? "default group"}` : "in a model group"}`}
-        title={unavailableAndUnstarred ? "Add a provider offering this model first" : starred ? "Manage group membership" : "Add to a model group"}
+        aria-label={starred ? translateInterface("Manage {model} in {group}", {model: model.name, group: defaultGroup?.name ?? translateInterface("default group")}) : translateInterface("Add {model} to a model group", {model: model.name})}
+        title={unavailableAndUnstarred ? translateInterface("Add a provider offering this model first") : starred ? translateInterface("Manage group membership") : translateInterface("Add to a model group")}
         disabled={unavailableAndUnstarred || groups.length === 0}
         onClick={() => setOpen((value) => !value)}
       >
         <span aria-hidden="true">{starred ? "★" : "☆"}</span>
       </button>
       {open && (
-        <div className="model-star-popover" role="dialog" aria-label={`Place ${model.name} in a group`}>
-          <div className="spread model-star-popover-head"><strong>Add to model group</strong><button type="button" className="btn-sm" aria-label="Close model group popover" onClick={() => close()}>Close</button></div>
+        <div className="model-star-popover" role="dialog" aria-label={translateInterface("Place {value0} in a group", { value0: model.name })}>
+          <div className="spread model-star-popover-head"><strong>{translateInterface("Add to model group")}</strong><button type="button" className="btn-sm" aria-label={translateInterface("Close model group popover")} onClick={() => close()}>{translateInterface("Close")}</button></div>
           <div className="field">
-            <label htmlFor={`star-group-${model.id}`}>Group</label>
+            <label htmlFor={`star-group-${model.id}`}>{translateInterface("Group")}</label>
             <select id={`star-group-${model.id}`} value={groupId} disabled={busy || groupLoading} onChange={(event) => selectGroup(event.target.value)}>
-              {groups.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? " (default)" : ""}</option>)}
+              {groups.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isDefault ? translateInterface(" (default)") : ""}</option>)}
             </select>
           </div>
           <div className="field">
-            <label htmlFor={`star-provider-${model.id}`}>Provider</label>
+            <label htmlFor={`star-provider-${model.id}`}>{translateInterface("Provider")}</label>
             <select id={`star-provider-${model.id}`} value={routeChoice} disabled={busy || groupLoading} onChange={(event) => setRouteChoice(event.target.value)}>
-              <option value="">Choose provider</option>
-              {unavailableMembershipRoute && membership?.providerAccountId && <option value={`${unavailableMembershipRoute.providerModelKey}\u0000${membership.providerAccountId}`} disabled>{unavailableMembershipRoute.providerName} · provider no longer added</option>}
+              <option value="">{translateInterface("Choose provider")}</option>
+              {unavailableMembershipRoute && membership?.providerAccountId && <option value={`${unavailableMembershipRoute.providerModelKey}\u0000${membership.providerAccountId}`} disabled>{unavailableMembershipRoute.providerName} {translateInterface("· provider no longer added")}</option>}
               {availableRoutes.map((route) => (
                 <option key={route.value} value={route.value}>
                   {route.label}
@@ -181,17 +185,17 @@ export function ModelGroupStar({
               ))}
             </select>
           </div>
-          {groupLoading && <p className="muted" role="status">Loading group…</p>}
+          {groupLoading && <p className="muted" role="status">{translateInterface("Loading group…")}</p>}
           {error && <p className="error" role="alert">{error}</p>}
           <div className="row model-star-actions">
-            {membership && <button type="button" className="btn-sm btn-danger" disabled={busy || groupLoading} onClick={remove}>Remove</button>}
+            {membership && <button type="button" className="btn-sm btn-danger" disabled={busy || groupLoading} onClick={remove}>{translateInterface("Remove")}</button>}
             <button
               type="button"
               className="btn-sm btn-primary"
               disabled={busy || groupLoading || !routeChoice || (membership?.providerModelKey && membership.providerAccountId ? `${membership.providerModelKey}\u0000${membership.providerAccountId}` === routeChoice : false)}
               onClick={save}
             >
-              {busy ? "Saving…" : "OK"}
+              {busy ? translateInterface("Saving…") : translateInterface("OK")}
             </button>
           </div>
         </div>

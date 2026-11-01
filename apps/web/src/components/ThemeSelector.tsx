@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 
 import { useEffect, useState } from "react";
 import { getHostRuntime } from "../lib/host-runtime";
@@ -16,6 +18,8 @@ function applyTheme(mode: ThemeMode) {
 }
 
 export function ThemeSelector() {
+  const translateInterface = usePointerTranslations();
+
   const [mode, setMode] = useState<ThemeMode>("system");
 
   useEffect(() => {
@@ -43,8 +47,8 @@ export function ThemeSelector() {
   if (getHostRuntime()) return null;
 
   return (
-    <fieldset className="theme-selector" aria-label="Color theme">
-      <legend>Theme</legend>
+    <fieldset className="theme-selector" aria-label={translateInterface("Color theme")}>
+      <legend>{translateInterface("Theme")}</legend>
       {(["light", "dark", "system"] as const).map((option) => (
         <button
           key={option}
@@ -53,7 +57,7 @@ export function ThemeSelector() {
           aria-pressed={mode === option}
           onClick={() => choose(option)}
         >
-          {option.charAt(0).toUpperCase() + option.slice(1)}
+          {translateInterface(option.charAt(0).toUpperCase() + option.slice(1))}
         </button>
       ))}
     </fieldset>

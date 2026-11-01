@@ -1,0 +1,117 @@
+{
+  "package": "@lobehub/icons-static-svg",
+  "version": "1.94.0",
+  "integrity": "sha512-Inx1TYkjLH6YeHOIHeVW9+OM/xxRnk8TmcQVKquFUDBmE3X9sUuRGt7kALrrDBNNAbrWz7Qq6fAiFj9E9Mmw9Q==",
+  "licence": "MIT",
+  "existingNotice": "apps/web/public/icons/brands/NOTICE.txt",
+  "added": [
+    {
+      "file": "azure-color.svg",
+      "sha256": "abc639d094593943c1b201270f4903c74d02d2e26acf26abf592a29c222c5181"
+    },
+    {
+      "file": "baseten.svg",
+      "sha256": "d560883f6df500c1290b2fb2018836d853c72697c1fc252793538fabf53ff28d"
+    },
+    {
+      "file": "cline.svg",
+      "sha256": "9003d2cdce82b016147b732abb4def60af55c348ba2cea2ba0b69a3c7d159b19"
+    },
+    {
+      "file": "cloudflare-color.svg",
+      "sha256": "cee35d3f0ecb7925ce0a89aeaff8b907cadae7c3fe44a23e4001cc8d5ee57502"
+    },
+    {
+      "file": "codebuddy-color.svg",
+      "sha256": "033d5da624460e686046f22b4e242b6b86484ad84ec4877e4efa15a9fb642b97"
+    },
+    {
+      "file": "crusoe-color.svg",
+      "sha256": "4aaec4fa4b003d63d03ec9f2ab14d4c1fb94bb40d919cd57d7194f0d4f6bf2e8"
+    },
+    {
+      "file": "cursor.svg",
+      "sha256": "0cb51bddf264ae108926fd554c063ef40fc1aac3c5c921ddb39ad184e4e5d0ef"
+    },
+    {
+      "file": "featherless-color.svg",
+      "sha256": "45efbd887b9cfbef1bcef24c202df762ea2fa71a8fa5d96903cdad72a23a0965"
+    },
+    {
+      "file": "huggingface-color.svg",
+      "sha256": "5d39d66bb6c9b026d3cb5de7bd9978dad3906570df2aca8f00078a6f8a3d0f5e"
+    },
+    {
+      "file": "hyperbolic-color.svg",
+      "sha256": "459ebd5a986f2ba3dded01c29b97fb708893064ba64f5aa2131fd9690b32f503"
+    },
+    {
+      "file": "kilocode.svg",
+      "sha256": "a2aef0e0bb992ebe768bfb8c3a3ab6ff2c2638448b09dd88db27877de1c07a22"
+    },
+    {
+      "file": "lmstudio.svg",
+      "sha256": "4a575e8382b52ce742ac5d21d361a7d2a08cea7c12390ee1bbb755ef7d3cc25b"
+    },
+    {
+      "file": "nebius.svg",
+      "sha256": "4213ea25ec4c782688a7dafdad4bb828096151639077001c4df9c10a315f1af1"
+    },
+    {
+      "file": "nousresearch.svg",
+      "sha256": "4dc3c7cdf13d2f0bdf16b872d76293f048010a00f580df68a85e1f9c4e500e5d"
+    },
+    {
+      "file": "novita-color.svg",
+      "sha256": "e41321ff6a421b958c7f402f11ffcf44dbcef9c703c952736bcc92c0fd6624c4"
+    },
+    {
+      "file": "ollama.svg",
+      "sha256": "3a268218fb2e6e81fa31df70f70b51331625047794db81db21d35359428fae7a"
+    },
+    {
+      "file": "opencode.svg",
+      "sha256": "7cfa6e9d6726f7c9fa26c7d9aef0dfec52d20a137380454340f30f12ccbfd302"
+    },
+    {
+      "file": "qoder-color.svg",
+      "sha256": "396596d247477e2a036c141a16ec266df7b14c0130b777a68fd04bc89af50bc8"
+    },
+    {
+      "file": "siliconcloud-color.svg",
+      "sha256": "a02d8d7ccb81739fbc720e2e5daaf149013dd5088605dc2dce1b71df0784d424"
+    },
+    {
+      "file": "stepfun-color.svg",
+      "sha256": "f55afc0e6004c8854f76bd5bbcc0fce9fc0ed9316691d54fb02d088c24fab40d"
+    },
+    {
+      "file": "tencentcloud-color.svg",
+      "sha256": "f860dae064a3afd24970efd2bc5892f39438526bf52c3a9748f61fc05c1cfd58"
+    },
+    {
+      "file": "venice-color.svg",
+      "sha256": "a4a909b289b05d3b4cc716452d0c744619b23e110d2853bafd81bfba7c8c165f"
+    },
+    {
+      "file": "vercel.svg",
+      "sha256": "4874d52d8b2ce7c309cbd10c424fee123b2c9483e76d76ad0dca41794483eb24"
+    },
+    {
+      "file": "vertexai-color.svg",
+      "sha256": "40f8bb6f7aca8d80ce2b0bd0d976e8e3ddeada3719758d262ea20075c11ad764"
+    },
+    {
+      "file": "vllm-color.svg",
+      "sha256": "3f837bad8d7f85d19e860a089639289ddd7492e67dc1ac7bd0f129f8f19b8ae6"
+    },
+    {
+      "file": "volcengine-color.svg",
+      "sha256": "84f9e2cd1da7e73dc6c9a0f2521745d39cae96c008752cdb1baf57a8c94393a1"
+    },
+    {
+      "file": "xiaomimimo.svg",
+      "sha256": "b04ad7dad52af2212c4567daf0ee6856f2c4625c92c680a27f9880295d558b71"
+    }
+  ]
+}

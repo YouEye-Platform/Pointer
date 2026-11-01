@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -18,6 +20,8 @@ export function AuthAvailabilityGate({
 }: {
   children: React.ReactNode;
 }) {
+  const translateInterface = usePointerTranslations();
+
   const [state, setState] = useState<State>({ kind: "loading" });
 
   const detect = useCallback(async () => {
@@ -52,16 +56,12 @@ export function AuthAvailabilityGate({
     return (
       <section className="card auth-card stack" aria-labelledby="managed-host-title">
         <div>
-          <h1 id="managed-host-title">Managed by your host platform</h1>
+          <h1 id="managed-host-title">{translateInterface("Managed by your host platform")}</h1>
           <p className="muted">
-            This Pointer service is managed by its host platform. Use host
-            Settings → AI to configure models and applications.
-          </p>
+            {translateInterface("This Pointer service is managed by its host platform. Use host Settings → AI to configure models and applications.")}</p>
         </div>
         <p className="muted" role="status">
-          Local Pointer sign-in and account creation are unavailable on this
-          deployment.
-        </p>
+          {translateInterface("Local Pointer sign-in and account creation are unavailable on this deployment.")}</p>
       </section>
     );
   }
@@ -70,23 +70,20 @@ export function AuthAvailabilityGate({
     return (
       <section className="card auth-card stack" aria-labelledby="capability-error-title">
         <div>
-          <h1 id="capability-error-title">Unable to check this Pointer service</h1>
+          <h1 id="capability-error-title">{translateInterface("Unable to check this Pointer service")}</h1>
           <p className="muted">
-            Pointer could not determine whether local sign-in is available.
-            Check the Pointer server connection and try again.
-          </p>
+            {translateInterface("Pointer could not determine whether local sign-in is available. Check the Pointer server connection and try again.")}</p>
         </div>
         <button className="btn-primary" type="button" onClick={() => void detect()}>
-          Try again
-        </button>
+          {translateInterface("Try again")}</button>
       </section>
     );
   }
 
   return (
     <section className="card auth-card stack" aria-live="polite">
-      <h1>Checking Pointer…</h1>
-      <p className="muted">Confirming how this service is managed.</p>
+      <h1>{translateInterface("Checking Pointer…")}</h1>
+      <p className="muted">{translateInterface("Confirming how this service is managed.")}</p>
     </section>
   );
 }

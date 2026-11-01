@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 import { useState } from "react";
 import Link from "next/link";
 import { api, ApiError, runtimePath } from "@/lib/api";
@@ -6,6 +8,8 @@ import { useAuth, type User } from "@/lib/store";
 import { AuthAvailabilityGate } from "@/components/AuthAvailabilityGate";
 
 export default function RegisterPage() {
+  const translateInterface = usePointerTranslations();
+
   const setAuth = useAuth((s) => s.setAuth);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -22,7 +26,7 @@ export default function RegisterPage() {
       setAuth(res.token, res.user);
       window.location.replace(runtimePath("/dashboard"));
     } catch (err) {
-      setError(err instanceof ApiError || err instanceof Error ? err.message : "Registration failed");
+      setError(translateInterface("Registration failed"));
     } finally {
       setBusy(false);
     }
@@ -33,27 +37,27 @@ export default function RegisterPage() {
       <AuthAvailabilityGate>
         <form className="card auth-card stack" onSubmit={submit}>
           <div>
-            <h1>Create account</h1>
-            <p className="muted">The first account becomes the admin.</p>
+            <h1>{translateInterface("Create account")}</h1>
+            <p className="muted">{translateInterface("The first account becomes the admin.")}</p>
           </div>
           <div className="field">
-            <label htmlFor="register-name">Name</label>
+            <label htmlFor="register-name">{translateInterface("Name")}</label>
             <input id="register-name" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </div>
           <div className="field">
-            <label htmlFor="register-email">Email</label>
+            <label htmlFor="register-email">{translateInterface("Email")}</label>
             <input id="register-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="field">
-            <label htmlFor="register-password">Password</label>
+            <label htmlFor="register-password">{translateInterface("Password")}</label>
             <input id="register-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
           </div>
           {error && <div className="error">{error}</div>}
           <button className="btn-primary" type="submit" disabled={busy}>
-            {busy ? "Creating…" : "Create account"}
+            {busy ? translateInterface("Creating…") : translateInterface("Create account")}
           </button>
           <p className="muted" style={{ textAlign: "center" }}>
-            Already have an account? <Link href="/login">Sign in</Link>
+            {translateInterface("Already have an account?")}<Link href="/login">{translateInterface("Sign in")}</Link>
           </p>
         </form>
       </AuthAvailabilityGate>

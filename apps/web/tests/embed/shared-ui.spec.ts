@@ -7,6 +7,13 @@ test("full screens share React, isolate hosts and unmount without changing the h
   await page.goto("/");
   const first = page.locator("#pointer-one");
   const second = page.locator("#pointer-two");
+  const settings = page.locator("#pointer-settings");
+  await expect(settings.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await expect(settings.getByRole("navigation")).toHaveCount(0);
+  await expect(settings.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+  await expect(settings.locator(".pointer-root")).toHaveCSS("color", "rgb(18, 52, 86)");
+  await page.evaluate(() => (window as any).pointerSettings.navigate("/groups"));
+  await expect(settings.getByRole("heading", { name: "Model Groups", exact: true })).toBeVisible();
   await expect(first.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
   await expect(second.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
   await expect(first.getByRole("button", { name: "Menu", exact: true })).toBeVisible();
@@ -31,4 +38,33 @@ test("full screens share React, isolate hosts and unmount without changing the h
   await page.getByRole("button", { name: "Host count 1" }).click();
   await expect(page.getByRole("button", { name: "Host count 2" })).toBeVisible();
   expect(errors).toEqual([]);
+  await page.evaluate(() => (window as any).pointerSettings.unmount());
+  expect(await settings.getAttribute("data-pointer-navigation")).toBeNull();
+});
+
+test("locale updates preserve drafts and remain isolated between factory mounts", async ({page}) => {
+  await page.goto("/");
+  const first = page.locator("#pointer-one"), second = page.locator("#pointer-two");
+  await expect(first.getByRole("heading", {name:"Providers",exact:true})).toBeVisible();
+  await page.evaluate(() => (window as any).pointerOne.setLocale("ru-RU"));
+  await expect(first.getByRole("heading", {name:"Провайдеры",exact:true})).toBeVisible();
+  await expect(second.getByRole("heading", {name:"Providers",exact:true})).toBeVisible();
+  await page.evaluate(() => (window as any).pointerOne.navigate("/groups"));
+  const groups = first.getByRole("heading", {level:1});
+  await expect(groups).toContainText("Группы моделей");
+  await first.getByRole("button", {name:"Новая группа",exact:true}).click();
+  const dialog = first.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const input = dialog.locator("input").first();
+  await input.fill("Draft <script> & private");
+  await page.evaluate(() => (window as any).pointerOne.setLocale("de-DE"));
+  await expect(first.getByRole("heading").first()).toContainText("Modellgruppen");
+  await expect(input).toHaveValue("Draft <script> & private");
+  await expect(second.getByRole("heading", {name:"Providers",exact:true})).toBeVisible();
+  for (const [locale,label] of [["fr-FR","Groupes de modèles"],["es-MX","Grupos de modelos"],["unsupported","Model Groups"]]) {
+    await page.evaluate(locale => (window as any).pointerOne.setLocale(locale), locale);
+    await expect(first.getByRole("heading").first()).toContainText(label);
+    await expect(input).toHaveValue("Draft <script> & private");
+  }
+  await expect(first.locator("script")).toHaveCount(0);
 });

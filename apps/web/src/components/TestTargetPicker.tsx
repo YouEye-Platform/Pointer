@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 
 import { useDeferredValue, useEffect, useId, useState } from "react";
 import type { TestModelSelection, TestModelTargetsResponse } from "@/lib/test-model";
@@ -14,6 +16,8 @@ interface Props {
 const EMPTY_SELECTION = { modelId: "", targetId: "" };
 
 export function TestTargetPicker({ label, targets, value, onChange, disabled = false }: Props) {
+  const translateInterface = usePointerTranslations();
+
   const inputId = useId();
   const listId = `${inputId}-list`;
   const [providerFilter, setProviderFilter] = useState("");
@@ -91,19 +95,19 @@ export function TestTargetPicker({ label, targets, value, onChange, disabled = f
   }
 
   return <section className="test-target-card" aria-label={label}>
-    <div className="spread test-target-title"><strong>{label}</strong>{selectedModel && <span className="badge">{selectedModel.providers.length} provider{selectedModel.providers.length === 1 ? "" : "s"}</span>}</div>
+    <div className="spread test-target-title"><strong>{label}</strong>{selectedModel && <span className="badge">{selectedModel.providers.length} {translateInterface("provider")}{selectedModel.providers.length === 1 ? "" : "s"}</span>}</div>
     <div className="field">
-      <label htmlFor={`${inputId}-filter`}>Provider filter</label>
+      <label htmlFor={`${inputId}-filter`}>{translateInterface("Provider filter")}</label>
       <select id={`${inputId}-filter`} value={providerFilter} disabled={disabled} onChange={(event) => changeProviderFilter(event.target.value)}>
-        <option value="">All providers ({targets.models.length} models)</option>
+        <option value="">{translateInterface("All providers (")}{targets.models.length} {translateInterface("models)")}</option>
         {targets.providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.name} ({provider.modelCount})</option>)}
       </select>
-      <small className="field-hint">Leave blank to search every testable model.</small>
+      <small className="field-hint">{translateInterface("Leave blank to search every testable model.")}</small>
     </div>
     <div className="field model-combobox" onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
     }}>
-      <label htmlFor={inputId}>Model</label>
+      <label htmlFor={inputId}>{translateInterface("Model")}</label>
       <input
         id={inputId}
         type="search"
@@ -113,7 +117,7 @@ export function TestTargetPicker({ label, targets, value, onChange, disabled = f
         aria-controls={listId}
         aria-expanded={open}
         aria-activedescendant={open && visibleModels[activeIndex] ? `${listId}-${activeIndex}` : undefined}
-        placeholder="Search model name or ID..."
+        placeholder={translateInterface("Search model name or ID...")}
         value={query}
         disabled={disabled}
         onFocus={() => { setOpen(true); setActiveIndex(0); }}
@@ -139,22 +143,22 @@ export function TestTargetPicker({ label, targets, value, onChange, disabled = f
           <span><strong>{model.name}</strong><small className="mono">{model.canonicalModelId ?? model.providers[0]?.rawModelId}</small></span>
           <span className="badge">{model.providers.length}</span>
         </button>)}
-        {visibleModels.length === 0 && <p>No models match this search.</p>}
-        {matchingModels.length > visibleModels.length && <p>{matchingModels.length - visibleModels.length} more models. Keep typing to narrow the list.</p>}
+        {visibleModels.length === 0 && <p>{translateInterface("No models match this search.")}</p>}
+        {matchingModels.length > visibleModels.length && <p>{matchingModels.length - visibleModels.length} {translateInterface("more models. Keep typing to narrow the list.")}</p>}
       </div>}
     </div>
     <div className="field">
-      <label htmlFor={`${inputId}-provider`}>Run through</label>
+      <label htmlFor={`${inputId}-provider`}>{translateInterface("Run through")}</label>
       <select
         id={`${inputId}-provider`}
         value={selectedTarget?.id ?? ""}
         disabled={disabled || !selectedModel}
         onChange={(event) => onChange({ modelId: selectedModel!.id, targetId: event.target.value })}
       >
-        {!selectedModel && <option value="">Select a model first</option>}
+        {!selectedModel && <option value="">{translateInterface("Select a model first")}</option>}
         {providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.providerName}{provider.providerAccountNickname ? ` · ${provider.providerAccountNickname}` : ""} ({provider.rawModelId})</option>)}
       </select>
-      {selectedTarget && <small className="field-hint mono">Upstream ID: {selectedTarget.rawModelId}</small>}
+      {selectedTarget && <small className="field-hint mono">{translateInterface("Upstream ID:")}{selectedTarget.rawModelId}</small>}
     </div>
   </section>;
 }

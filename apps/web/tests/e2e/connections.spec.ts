@@ -44,7 +44,13 @@ test("providers share list and detail pages, preserve keys and sign-in, and have
   await page.goto("/connections");
   await expect(page).toHaveURL(/\/providers$/);
   await expect(page.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
-  for (const label of ["ChatGPT", "OpenCode Go", "Anthropic"]) await expect(page.getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  for (const label of ["ChatGPT", "OpenCode Go", "Anthropic"]) await expect(page.getByRole("link", { name: new RegExp(label) })).toHaveCount(0);
+  await page.getByRole("button", { name: "Add Provider", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "Add Provider", exact: true });
+  await expect(picker.getByRole("link", { name: /ChatGPT/ })).toBeVisible();
+  await expect(picker.getByRole("link", { name: /Anthropic/ })).toBeVisible();
+  await picker.getByRole("searchbox").fill("OpenCode");
+  await expect(picker.getByRole("link")).toHaveCount(1);
   await page.getByRole("link", { name: /OpenCode Go/ }).click();
   await expect(page).toHaveURL(/\/providers\/opencode-go$/);
   await page.getByLabel("API key", { exact: true }).fill("fixture-only-key");
@@ -56,6 +62,9 @@ test("providers share list and detail pages, preserve keys and sign-in, and have
   await expect(page.getByRole("checkbox")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Enable|Disable/ })).toHaveCount(0);
   await page.screenshot({ path: "test-results/pointer-provider-desktop.png", fullPage: true });
+  await page.goto("/providers");
+  await expect(page.getByRole("link", { name: /OpenCode Go/ })).toContainText("Connected");
+  await expect(page.getByRole("link", { name: /Anthropic/ })).toHaveCount(0);
   await page.goto("/providers/openai");
   await page.getByRole("button", { name: "Connect account", exact: true }).click();
   await expect(page.getByText("ABCD-EFGH", { exact: true })).toBeVisible(); expect(loginCount).toBe(1);

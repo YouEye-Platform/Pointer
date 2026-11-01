@@ -12,7 +12,9 @@
     "test": "pnpm build && pnpm prepare:standalone && playwright test",
     "test:e2e": "pnpm build && pnpm prepare:standalone && playwright test",
     "test:e2e:headed": "pnpm build && pnpm prepare:standalone && playwright test --headed",
-    "build:embed": "bun scripts/build-embed.mjs"
+    "build:embed": "pnpm i18n:check && bun scripts/build-embed.mjs",
+    "i18n:check": "node scripts/check-i18n.mjs && node scripts/check-i18n-source.mjs",
+    "test:i18n": "node --test scripts/check-i18n.test.mjs scripts/host-runtime.test.mjs"
   },
   "dependencies": {
     "@pointer/contracts": "workspace:*",

@@ -1,4 +1,6 @@
 "use client";
+import { usePointerTranslations } from "@/lib/i18n";
+
 
 import { useEffect, useRef } from "react";
 
@@ -11,6 +13,8 @@ export function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const translateInterface = usePointerTranslations();
+
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const capturedFocus = useRef(false);
@@ -68,9 +72,8 @@ export function Modal({
       >
         <div className="spread" style={{ marginBottom: 16 }}>
           <h2 id="modal-title" style={{ margin: 0 }}>{title}</h2>
-          <button className="btn-sm" onClick={onClose} aria-label="Close dialog">
-            Close
-          </button>
+          <button className="btn-sm" onClick={onClose} aria-label={translateInterface("Close dialog")}>
+            {translateInterface("Close")}</button>
         </div>
         {children}
       </div>

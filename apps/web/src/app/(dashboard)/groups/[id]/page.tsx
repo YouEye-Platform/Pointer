@@ -1,4 +1,7 @@
 "use client";
+import { DetailSkeleton } from "@/components/LoadingSkeleton";
+import { usePointerTranslations } from "@/lib/i18n";
+
 import { GroupRouting } from "@/components/GroupRouting";
 
 import Link from "next/link";
@@ -11,6 +14,8 @@ import { formatPrice, formatTokens, type CatalogDetailResponse, type CatalogList
 import type { GroupDetail, GroupEntry } from "@/lib/groups";
 
 export default function GroupDetailPage() {
+  const translateInterface = usePointerTranslations();
+
   const id = decodeURIComponent(String(useParams<{ id: string }>().id));
   const router = useRouter();
   const [group, setGroup] = useState<GroupDetail | null>(null);
@@ -26,7 +31,7 @@ export default function GroupDetailPage() {
     try {
       setGroup(await api.get<GroupDetail>(`/api/groups/${encodeURIComponent(id)}`));
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to load group");
+      setError(translateInterface("Failed to load group"));
       setGroup(null);
     } finally {
       setLoading(false);
@@ -41,7 +46,7 @@ export default function GroupDetailPage() {
       await api.put(`/api/groups/${encodeURIComponent(id)}/set-default`);
       await load();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to set default group");
+      setError(translateInterface("Failed to set default group"));
     } finally {
       setBusy("");
     }
@@ -58,7 +63,7 @@ export default function GroupDetailPage() {
       await load();
       setRenaming(false);
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to rename group");
+      setError(translateInterface("Failed to rename group"));
     } finally {
       setBusy("");
     }
@@ -71,7 +76,7 @@ export default function GroupDetailPage() {
       await api.del(`/api/groups/${encodeURIComponent(id)}`);
       router.push("/groups");
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to delete group");
+      setError(translateInterface("Failed to delete group"));
       setBusy("");
     }
   }
@@ -84,7 +89,7 @@ export default function GroupDetailPage() {
       await load();
       return true;
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to update model");
+      setError(translateInterface("Failed to update model"));
       return false;
     } finally {
       setBusy("");
@@ -98,7 +103,7 @@ export default function GroupDetailPage() {
       await api.del(`/api/groups/${encodeURIComponent(id)}/entries/${encodeURIComponent(entry.id)}`);
       await load();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to remove model");
+      setError(translateInterface("Failed to remove model"));
     } finally {
       setBusy("");
     }
@@ -116,55 +121,55 @@ export default function GroupDetailPage() {
       await api.put(`/api/groups/${encodeURIComponent(id)}/entries/reorder`, { entryIds: ids });
       await load();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to reorder models");
+      setError(translateInterface("Failed to reorder models"));
       await load();
     } finally {
       setBusy("");
     }
   }
 
-  if (loading) return <div className="detail-skeleton"><span className="skeleton line wide" /><span className="skeleton block" /></div>;
-  if (!group) return <div><Link href="/groups" className="back-link">Back to groups</Link><div className="notice danger" role="alert">{error || "Group not found"}</div></div>;
+  if (loading) return <DetailSkeleton label={translateInterface("Loading group")} kind="group" />;
+  if (!group) return <div><Link href="/groups" className="back-link">{translateInterface("Back to groups")}</Link><div className="notice danger" role="alert">{error || translateInterface("Group not found")}</div></div>;
 
   return (
     <div>
-      <Link href="/groups" className="back-link">Back to groups</Link>
+      <Link href="/groups" className="back-link">{translateInterface("Back to groups")}</Link>
       <div className="spread page-head">
         <div>
-          <p className="eyebrow">Model group</p>
-          <div className="row"><h1>{group.name}</h1>{group.isDefault && <span className="badge default-badge">★ Default</span>}</div>
-          <p className="muted">{group.entries.length} models · {group.entries.filter((entry) => entry.enabled).length} enabled</p>
+          <p className="eyebrow">{translateInterface("Model group")}</p>
+          <div className="row"><h1>{group.name}</h1>{group.isDefault && <span className="badge default-badge">{translateInterface("★ Default")}</span>}</div>
+          <p className="muted">{group.entries.length} {translateInterface("models ·")}{group.entries.filter((entry) => entry.enabled).length} {translateInterface("enabled")}</p>
         </div>
         <div className="row">
-          {!group.isDefault && <button disabled={busy === "default"} onClick={setDefault}>Set as default</button>}
-          <button disabled={busy === "rename"} onClick={() => setRenaming(true)}>Rename</button>
-          <button className="btn-primary" onClick={() => setAdding(true)}>Add model</button>
-          <button className="btn-danger" disabled={group.isDefault || busy === "delete"} title={group.isDefault ? "The default group cannot be deleted" : "Delete group"} onClick={removeGroup}>Delete</button>
+          {!group.isDefault && <button disabled={busy === "default"} onClick={setDefault}>{translateInterface("Set as default")}</button>}
+          <button disabled={busy === "rename"} onClick={() => setRenaming(true)}>{translateInterface("Rename")}</button>
+          <button className="btn-primary" onClick={() => setAdding(true)}>{translateInterface("Add model")}</button>
+          <button className="btn-danger" disabled={group.isDefault || busy === "delete"} title={group.isDefault ? translateInterface("The default group cannot be deleted") : translateInterface("Delete group")} onClick={removeGroup}>{translateInterface("Delete")}</button>
         </div>
       </div>
-      <div className="notice" role="note"><strong>Automatic routing aliases:</strong> the first enabled model receives big / opus / default, the second medium / sonnet / secondary, and the third small / haiku / utility. They are accepted by the gateway but not listed by the models API.</div>
+      <div className="notice" role="note"><strong>{translateInterface("Automatic routing aliases:")}</strong> {translateInterface("the first enabled model receives big / opus / default, the second medium / sonnet / secondary, and the third small / haiku / utility. They are accepted by the gateway but not listed by the models API.")}</div>
       {error && <div className="notice danger" role="alert">{error}</div>}
       <GroupRouting groupId={id} entries={group.entries} />
       {group.entries.length === 0 ? (
-        <div className="card empty-state"><h2>No models in this group</h2><p className="muted">Add an available model to establish the first routing slot.</p><button className="btn-primary" onClick={() => setAdding(true)}>Add model</button></div>
+        <div className="card empty-state"><h2>{translateInterface("No models in this group")}</h2><p className="muted">{translateInterface("Add an available model to establish the first routing slot.")}</p><button className="btn-primary" onClick={() => setAdding(true)}>{translateInterface("Add model")}</button></div>
       ) : (
         <div className="card table-scroll">
           <table className="group-entry-table">
-            <thead><tr><th>Position</th><th>Model</th><th>Provider</th><th>Alias</th><th>Enabled</th><th>Hidden routes</th><th>Price / context</th><th></th></tr></thead>
+            <thead><tr><th>{translateInterface("Position")}</th><th>{translateInterface("Model")}</th><th>{translateInterface("Provider")}</th><th>{translateInterface("Alias")}</th><th>{translateInterface("Enabled")}</th><th>{translateInterface("Hidden routes")}</th><th>{translateInterface("Price / context")}</th><th></th></tr></thead>
             <tbody>
               {group.entries.map((entry, index) => (
                 <tr key={entry.id} className={!entry.enabled ? "disabled-row" : ""}>
-                  <td><div className="row compact"><strong>{index + 1}</strong><button className="btn-sm" aria-label={`Move ${entry.modelName} up`} disabled={index === 0 || busy === "reorder"} onClick={() => move(entry.id, -1)}>↑</button><button className="btn-sm" aria-label={`Move ${entry.modelName} down`} disabled={index === group.entries.length - 1 || busy === "reorder"} onClick={() => move(entry.id, 1)}>↓</button></div></td>
-                  <td><div className="model-identity"><IconAvatar iconKey={entry.modelIconKey} name={entry.modelName} /><div><strong>{entry.modelName}</strong>{entry.creator && <small className="muted">{entry.creator}</small>}{entry.needsReview && <span className="badge danger">Needs review</span>}</div></div></td>
-                  <td><div className="model-identity"><IconAvatar iconKey={entry.providerIconKey} name={entry.providerName} /><div><strong>{entry.providerName}</strong><small className="mono muted" title={entry.rawModelId}>{entry.rawModelId}</small>{!entry.providerAvailable && <span className="error">Provider not added</span>} {entry.catalogEntityId && <button className="btn-sm provider-change-button" disabled={busy === entry.id} onClick={() => setChangingProvider(entry)}>Change provider</button>}</div></div></td>
-                  <td><input aria-label={`Alias for ${entry.modelName}`} defaultValue={entry.alias ?? ""} disabled={busy === entry.id} onBlur={(event) => {
+                  <td><div className="row compact"><strong>{index + 1}</strong><button className="btn-sm" aria-label={translateInterface("Move {value0} up", { value0: entry.modelName })} disabled={index === 0 || busy === "reorder"} onClick={() => move(entry.id, -1)}>↑</button><button className="btn-sm" aria-label={translateInterface("Move {value0} down", { value0: entry.modelName })} disabled={index === group.entries.length - 1 || busy === "reorder"} onClick={() => move(entry.id, 1)}>↓</button></div></td>
+                  <td><div className="model-identity"><IconAvatar iconKey={entry.modelIconKey} name={entry.modelName} /><div><strong>{entry.modelName}</strong>{entry.creator && <small className="muted">{entry.creator}</small>}{entry.needsReview && <span className="badge danger">{translateInterface("Needs review")}</span>}</div></div></td>
+                  <td><div className="model-identity"><IconAvatar iconKey={entry.providerIconKey} name={entry.providerName} /><div><strong>{entry.providerName}</strong><small className="mono muted" title={entry.rawModelId}>{entry.rawModelId}</small>{!entry.providerAvailable && <span className="error">{translateInterface("Provider not added")}</span>} {entry.catalogEntityId && <button className="btn-sm provider-change-button" disabled={busy === entry.id} onClick={() => setChangingProvider(entry)}>{translateInterface("Change provider")}</button>}</div></div></td>
+                  <td><input aria-label={translateInterface("Alias for {value0}", { value0: entry.modelName })} defaultValue={entry.alias ?? ""} disabled={busy === entry.id} onBlur={(event) => {
                     const value = event.target.value.trim() || null;
                     if (value !== entry.alias) updateEntry(entry, { alias: value });
                   }} /></td>
-                  <td><input className="checkbox" type="checkbox" checked={entry.enabled} disabled={busy === entry.id} aria-label={`Enable ${entry.modelName}`} onChange={(event) => updateEntry(entry, { enabled: event.target.checked })} /></td>
+                  <td><input className="checkbox" type="checkbox" checked={entry.enabled} disabled={busy === entry.id} aria-label={translateInterface("Enable {value0}", { value0: entry.modelName })} onChange={(event) => updateEntry(entry, { enabled: event.target.checked })} /></td>
                   <td><div className="badge-row">{entry.hiddenAliases.length ? entry.hiddenAliases.map((alias) => <span className="badge" key={alias}>{alias}</span>) : <span className="muted">—</span>}</div></td>
-                  <td>{formatPrice(entry.inputPrice == null ? null : Number(entry.inputPrice))} / {formatPrice(entry.outputPrice == null ? null : Number(entry.outputPrice))}<small className="muted">{formatTokens(entry.contextWindow)} context</small></td>
-                  <td><button className="btn-sm btn-danger" disabled={busy === entry.id} onClick={() => removeEntry(entry)}>Remove</button></td>
+                  <td>{formatPrice(entry.inputPrice == null ? null : Number(entry.inputPrice))} / {formatPrice(entry.outputPrice == null ? null : Number(entry.outputPrice))}<small className="muted">{formatTokens(entry.contextWindow)} {translateInterface("context")}</small></td>
+                  <td><button className="btn-sm btn-danger" disabled={busy === entry.id} onClick={() => removeEntry(entry)}>{translateInterface("Remove")}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -187,6 +192,8 @@ export default function GroupDetailPage() {
 }
 
 function AddModelModal({ group, onClose, onAdded }: { group: GroupDetail; onClose: () => void; onAdded: () => Promise<void> }) {
+  const translateInterface = usePointerTranslations();
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [models, setModels] = useState<CatalogModel[]>([]);
@@ -231,7 +238,7 @@ function AddModelModal({ group, onClose, onAdded }: { group: GroupDetail; onClos
         setTotal(result.total);
       }
     }).catch((reason) => {
-      if (!cancelled) setError(reason instanceof ApiError ? reason.message : "Failed to load models");
+      if (!cancelled) setError(translateInterface("Failed to load models"));
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -261,7 +268,7 @@ function AddModelModal({ group, onClose, onAdded }: { group: GroupDetail; onClos
       });
       await onAdded();
     } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "Failed to add model");
+      setError(translateInterface("Failed to add model"));
     } finally {
       setBusy(false);
     }
@@ -269,28 +276,28 @@ function AddModelModal({ group, onClose, onAdded }: { group: GroupDetail; onClos
 
   const duplicateCanonical = selected ? group.entries.some((entry) => entry.catalogEntityId === selected.id) : false;
   return (
-    <Modal title={selected ? `Choose provider for ${selected.name}` : "Add model"} onClose={onClose}>
+    <Modal title={selected ? translateInterface("Choose provider for {value0}", { value0: selected.name }) : translateInterface("Add model")} onClose={onClose}>
       {!selected ? (
         <div>
-          <div className="field"><label htmlFor="group-model-search">Search available models</label><input id="group-model-search" autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Claude, GPT, Gemini…" /></div>
+          <div className="field"><label htmlFor="group-model-search">{translateInterface("Search available models")}</label><input id="group-model-search" autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Claude, GPT, Gemini…" /></div>
           {error && <p className="error" role="alert">{error}</p>}
           <div className="group-model-results" aria-busy={loading}>
-            {loading && models.length === 0 ? <p className="muted">Loading models…</p> : models.length === 0 ? <p className="muted">No matching available models.</p> : models.map((model) => {
+            {loading && models.length === 0 ? <p className="muted">{translateInterface("Loading models…")}</p> : models.length === 0 ? <p className="muted">{translateInterface("No matching available models.")}</p> : models.map((model) => {
               const added = group.entries.some((entry) => entry.catalogEntityId === model.id);
-              return <button type="button" key={model.id} onClick={() => choose(model)}><IconAvatar iconKey={model.modelIconKey ?? model.creatorIconKey} name={model.name} /><span><strong>{model.name}</strong><small>{model.creator || "Unknown creator"} · {model.availableProviderCount} available provider{model.availableProviderCount === 1 ? "" : "s"}</small></span><span>{added ? "Add another route" : "Choose"}</span></button>;
+              return <button type="button" key={model.id} onClick={() => choose(model)}><IconAvatar iconKey={model.modelIconKey ?? model.creatorIconKey} name={model.name} /><span><strong>{model.name}</strong><small>{model.creator || translateInterface("Unknown creator")} · {model.availableProviderCount} {translateInterface("available provider")}{model.availableProviderCount === 1 ? "" : "s"}</small></span><span>{added ? translateInterface("Add another route") : translateInterface("Choose")}</span></button>;
             })}
           </div>
-          {models.length < total && <button className="group-load-more" type="button" disabled={loading} onClick={() => setPage((value) => value + 1)}>{loading ? "Loading…" : "Load more models"}</button>}
-          {error && <button className="btn-sm" type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button>}
+          {models.length < total && <button className="group-load-more" type="button" disabled={loading} onClick={() => setPage((value) => value + 1)}>{loading ? translateInterface("Loading…") : translateInterface("Load more models")}</button>}
+          {error && <button className="btn-sm" type="button" onClick={() => setReloadKey((value) => value + 1)}>{translateInterface("Retry")}</button>}
         </div>
       ) : (
         <div>
-          <button className="btn-sm" type="button" onClick={() => { setSelected(null); setProviderModelKey(""); setProviderAccountId(""); setAlias(""); }}>← Back to models</button>
-          <div className="field"><label htmlFor="group-model-provider">Provider route</label><select id="group-model-provider" autoFocus value={providerModelKey} onChange={(event) => { const next = event.target.value; setProviderModelKey(next); const accounts = selected.providers.find((provider) => provider.providerModelKey === next)?.accounts ?? []; setProviderAccountId(accounts.length === 1 ? accounts[0].id : ""); }}><option value="">Choose provider</option>{selected.providers.filter((provider) => provider.available).map((provider) => <option key={provider.providerModelKey} value={provider.providerModelKey}>{provider.providerName} · {provider.rawModelId}</option>)}</select></div>
-          {providerModelKey && <div className="field"><label htmlFor="group-model-account">Account</label><select id="group-model-account" value={providerAccountId} onChange={(event) => setProviderAccountId(event.target.value)}><option value="">Choose account</option>{(selected.providers.find((provider) => provider.providerModelKey === providerModelKey)?.accounts ?? []).map((account) => <option key={account.id} value={account.id}>{account.nickname || account.id.slice(-6)}</option>)}</select></div>}
-          <div className="field"><label htmlFor="group-model-alias">Public alias{duplicateCanonical ? " (required for another route)" : " (optional)"}</label><input id="group-model-alias" value={alias} onChange={(event) => setAlias(event.target.value)} required={duplicateCanonical} placeholder={duplicateCanonical ? `A unique name for this ${selected.name} route` : selected.name} /></div>
+          <button className="btn-sm" type="button" onClick={() => { setSelected(null); setProviderModelKey(""); setProviderAccountId(""); setAlias(""); }}>{translateInterface("← Back to models")}</button>
+          <div className="field"><label htmlFor="group-model-provider">{translateInterface("Provider route")}</label><select id="group-model-provider" autoFocus value={providerModelKey} onChange={(event) => { const next = event.target.value; setProviderModelKey(next); const accounts = selected.providers.find((provider) => provider.providerModelKey === next)?.accounts ?? []; setProviderAccountId(accounts.length === 1 ? accounts[0].id : ""); }}><option value="">{translateInterface("Choose provider")}</option>{selected.providers.filter((provider) => provider.available).map((provider) => <option key={provider.providerModelKey} value={provider.providerModelKey}>{provider.providerName} · {provider.rawModelId}</option>)}</select></div>
+          {providerModelKey && <div className="field"><label htmlFor="group-model-account">{translateInterface("Account")}</label><select id="group-model-account" value={providerAccountId} onChange={(event) => setProviderAccountId(event.target.value)}><option value="">{translateInterface("Choose account")}</option>{(selected.providers.find((provider) => provider.providerModelKey === providerModelKey)?.accounts ?? []).map((account) => <option key={account.id} value={account.id}>{account.nickname || account.id.slice(-6)}</option>)}</select></div>}
+          <div className="field"><label htmlFor="group-model-alias">{translateInterface("Public alias")}{duplicateCanonical ? translateInterface(" (required for another route)") : translateInterface(" (optional)")}</label><input id="group-model-alias" value={alias} onChange={(event) => setAlias(event.target.value)} required={duplicateCanonical} placeholder={duplicateCanonical ? translateInterface("A unique name for this {value0} route", { value0: selected.name }) : selected.name} /></div>
           {error && <p className="error" role="alert">{error}</p>}
-          <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" onClick={onClose}>Cancel</button><button type="button" className="btn-primary" disabled={!providerModelKey || !providerAccountId || (duplicateCanonical && !alias.trim()) || busy} onClick={add}>{busy ? "Adding…" : "Add to group"}</button></div>
+          <div className="row" style={{ justifyContent: "flex-end" }}><button type="button" onClick={onClose}>{translateInterface("Cancel")}</button><button type="button" className="btn-primary" disabled={!providerModelKey || !providerAccountId || (duplicateCanonical && !alias.trim()) || busy} onClick={add}>{busy ? translateInterface("Adding…") : translateInterface("Add to group")}</button></div>
         </div>
       )}
     </Modal>
@@ -308,16 +315,18 @@ function RenameGroupModal({
   onClose: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
+  const translateInterface = usePointerTranslations();
+
   const [name, setName] = useState(group.name);
   return (
-    <Modal title={`Rename ${group.name}`} onClose={onClose}>
+    <Modal title={translateInterface("Rename {value0}", { value0: group.name })} onClose={onClose}>
       <form onSubmit={(event) => {
         event.preventDefault();
         const value = name.trim();
         if (value) void onRename(value);
       }}>
-        <div className="field"><label htmlFor="rename-group">Group name</label><input id="rename-group" maxLength={100} required value={name} onChange={(event) => setName(event.target.value)} /></div>
-        <div className="row modal-actions"><button type="button" onClick={onClose}>Cancel</button><button className="btn-primary" disabled={busy || !name.trim()}>{busy ? "Saving…" : "Save name"}</button></div>
+        <div className="field"><label htmlFor="rename-group">{translateInterface("Group name")}</label><input id="rename-group" maxLength={100} required value={name} onChange={(event) => setName(event.target.value)} /></div>
+        <div className="row modal-actions"><button type="button" onClick={onClose}>{translateInterface("Cancel")}</button><button className="btn-primary" disabled={busy || !name.trim()}>{busy ? translateInterface("Saving…") : translateInterface("Save name")}</button></div>
       </form>
     </Modal>
   );
@@ -332,6 +341,8 @@ function ChangeProviderModal({
   onClose: () => void;
   onChange: (providerModelKey: string, providerAccountId: string) => Promise<boolean>;
 }) {
+  const translateInterface = usePointerTranslations();
+
   const [detail, setDetail] = useState<CatalogDetailResponse | null>(null);
   const initialChoice = entry.providerModelKey && entry.providerAccountId
     ? `${entry.providerModelKey}\u0000${entry.providerAccountId}`
@@ -348,7 +359,7 @@ function ChangeProviderModal({
         if (!cancelled) setDetail(result);
       })
       .catch((reason) => {
-        if (!cancelled) setError(reason instanceof ApiError ? reason.message : "Failed to load provider routes");
+        if (!cancelled) setError(translateInterface("Failed to load provider routes"));
       });
     return () => { cancelled = true; };
   }, [entry.catalogEntityId]);
@@ -361,31 +372,31 @@ function ChangeProviderModal({
     })),
   );
   return (
-    <Modal title={`Provider for ${entry.modelName}`} onClose={onClose}>
-      {!detail && !error ? <p className="muted">Loading available providers…</p> : (
+    <Modal title={translateInterface("Provider for {value0}", { value0: entry.modelName })} onClose={onClose}>
+      {!detail && !error ? <p className="muted">{translateInterface("Loading available providers…")}</p> : (
         <div className="field">
-          <label htmlFor="change-entry-provider">Provider</label>
+          <label htmlFor="change-entry-provider">{translateInterface("Provider")}</label>
           <select id="change-entry-provider" autoFocus value={routeChoice} onChange={(event) => setRouteChoice(event.target.value)}>
-            <option value="">Choose provider account</option>
+            <option value="">{translateInterface("Choose provider account")}</option>
             {available.map((route) => <option key={`${route.providerModelKey}:${route.providerAccountId}`} value={`${route.providerModelKey}\u0000${route.providerAccountId}`}>{route.label}</option>)}
           </select>
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}
-      {detail && available.length === 0 && <p className="muted">Add a provider offering this model before changing its route.</p>}
-      <div className="row modal-actions"><button type="button" onClick={onClose}>Cancel</button><button className="btn-primary" type="button" disabled={busy || !routeChoice || routeChoice === initialChoice} onClick={async () => {
+      {detail && available.length === 0 && <p className="muted">{translateInterface("Add a provider offering this model before changing its route.")}</p>}
+      <div className="row modal-actions"><button type="button" onClick={onClose}>{translateInterface("Cancel")}</button><button className="btn-primary" type="button" disabled={busy || !routeChoice || routeChoice === initialChoice} onClick={async () => {
         setBusy(true);
         setError("");
         try {
           const [providerModelKey, providerAccountId] = routeChoice.split("\u0000");
           const updated = await onChange(providerModelKey!, providerAccountId!);
-          if (!updated) setError("The provider could not be changed. Review the group error and try again.");
+          if (!updated) setError(translateInterface("The provider could not be changed. Review the group error and try again."));
         } catch (reason) {
-          setError(reason instanceof ApiError ? reason.message : "Failed to change provider");
+          setError(translateInterface("Failed to change provider"));
         } finally {
           setBusy(false);
         }
-      }}>{busy ? "Updating…" : "Update provider"}</button></div>
+      }}>{busy ? translateInterface("Updating…") : translateInterface("Update provider")}</button></div>
     </Modal>
   );
 }
