@@ -68,10 +68,11 @@ sidecar. Health/version responses expose component, version, repository,
 branch, commit and build time so mixed releases can be detected.
 
 The source-owned `.youeye/release/artifact-promotion.json` declaration also
-requires the publisher to attach signed product build and release metadata.
+requires the publisher to attach unsigned product build and release metadata
+that binds the Pointer archive by SHA-256 digest.
 YouEye can then verify the complete Pointer release through its protected
 release cache before publication and retain an installed product receipt.
-The native archive and its signed checksum envelope remain available to older
+The native archive and its SHA-256 checksum remain available to older
 readers. This packaging declaration changes neither the database schema nor the
 application payload contract; it does not require reinstalling Pointer.
 

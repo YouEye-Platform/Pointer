@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-30
 
-**Authoritative repository:** `https://github.com/YouEye-Platform/Pointer`
+**Authoritative repository:** `https://git.potemk.in/potemsla/Pointer`
 
 **Implementation branch:** `main`
 
@@ -133,7 +133,7 @@ The implementation worker must revalidate these facts before importing source.
 
 Pointer server donor:
 
-- repository: `https://github.com/YouEye-Platform/Pointer-Lite.git`;
+- repository: `https://git.potemk.in/potemsla/Pointer-Lite.git`;
 - branch: `main`;
 - observed head:
   `9435350c95d6a2bd5be2653b543c0490b410bffc`;
@@ -142,7 +142,7 @@ Pointer server donor:
 
 Pointer web donor:
 
-- repository: `https://github.com/YouEye-Platform/Pointer-WebUI.git`;
+- repository: `https://git.potemk.in/potemsla/Pointer-WebUI.git`;
 - branch: `main`;
 - observed head:
   `8acead41203f51ea5728601be8f634658cd4b87c`;
@@ -151,7 +151,7 @@ Pointer web donor:
 
 New repository:
 
-- repository: `https://github.com/YouEye-Platform/Pointer.git`;
+- repository: `https://git.potemk.in/potemsla/Pointer.git`;
 - observed on 2026-07-30 with no advertised `main`, `master` or tags.
 
 ### 3.2 Current toolchain

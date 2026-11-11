@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-31
 
-**Authoritative repository:** `https://github.com/YouEye-Platform/Pointer`
+**Authoritative repository:** `https://git.potemk.in/potemsla/Pointer`
 
 **Implementation branch:** `main`
 

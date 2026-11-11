@@ -6,8 +6,8 @@ imported; those repositories remain the historical record.
 
 | Imported component | Donor repository | Imported commit |
 | --- | --- | --- |
-| server and CLI | `https://github.com/YouEye-Platform/Pointer-Lite.git` | `9435350c95d6a2bd5be2653b543c0490b410bffc` |
-| web | `https://github.com/YouEye-Platform/Pointer-WebUI.git` | `8acead41203f51ea5728601be8f634658cd4b87c` |
+| server and CLI | `https://git.potemk.in/potemsla/Pointer-Lite.git` | `9435350c95d6a2bd5be2653b543c0490b410bffc` |
+| web | `https://git.potemk.in/potemsla/Pointer-WebUI.git` | `8acead41203f51ea5728601be8f634658cd4b87c` |
 
 Only tracked source, tests, contracts and relevant documentation were imported.
 No repository metadata, dependency directories, build output, environment

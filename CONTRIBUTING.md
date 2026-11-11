@@ -71,12 +71,14 @@ consistent. Unchanged published payloads retain their original provenance.
 
 ## Artifact promotion
 
-`.youeye/release/artifact-promotion.json` opts this source into external signed
+`.youeye/release/artifact-promotion.json` opts this source into external
 product release metadata. Source/package versions remain immutable build identity.
-The platform signs `product-build.json` once, binding the original source commit,
-artifact hashes and install contract; `product-release.json` assigns independent
-product versions and channels to that unchanged signed build. Promotion does not
-run source version preparation, repackage archives or repeat unchanged builds.
+The platform records `product-build.json` once, binding the original source commit,
+artifact SHA-256 digests and install contract; `product-release.json` assigns
+independent product versions and channels to that unchanged build. Release
+metadata is published unsigned; integrity comes from the SHA-256 digests, fetched
+over HTTPS. Promotion does not run source version preparation, repackage archives
+or repeat unchanged builds.
 Legacy releases keep their existing contract. New source/dependency/toolchain or
 build-configuration changes require a new candidate and relevant validation.
 

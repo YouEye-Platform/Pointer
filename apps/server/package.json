@@ -1,6 +1,6 @@
 {
   "name": "@pointer/server",
-  "version": "0.5.13",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "dev": "bun run --hot src/index.ts",

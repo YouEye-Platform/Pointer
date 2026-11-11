@@ -147,7 +147,7 @@ exact-identity test VM. The deployment runs migrations from the candidate,
 atomically swaps `/opt/pointer`, preserves `/etc/youeye-pointer.env` and all
 database/provider state, checks both `/readyz` listeners, and automatically
 restores the pre-deploy VM checkpoint on failure. It does not create a tag,
-signature, public release, or appliance.
+public release, or appliance.
 
 ## Integration gate
 

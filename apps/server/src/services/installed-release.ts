@@ -5,9 +5,10 @@ export type InstalledRelease = {
   version: string; channel: string; buildVersion: string; releaseSHA256: string;
 };
 
-// The platform publishes this projection only after authenticating both the
-// release and immutable build signatures. It is outside the application code
-// tree and is read on each request so promotion needs no service restart.
+// The platform publishes this projection only after checking the release
+// metadata and the sha256 digests of the immutable build payload. It is outside
+// the application code tree and is read on each request so promotion needs no
+// service restart.
 export async function installedRelease(product: string, buildVersion: string): Promise<InstalledRelease | null> {
   let file;
   try {

@@ -10,8 +10,9 @@ It excludes the standalone Pointer Web server and other release products.
 
 A public release must come from Pointer's canonical public repository, with an
 exact commit identity and a clean, reviewed source tree. The managed build is
-network-denied and remains unsigned: signing, distribution, appliance
-integration, and trust decisions are external platform responsibilities.
+network-denied and unsigned; releases are checked by SHA-256 digest.
+Distribution, appliance integration, and trust decisions are external platform
+responsibilities.
 
 The repository's managed build manifest remains `youeye.build.v2` with its
 current `build_kind`, validation/profile values, trust boundaries, output role,

@@ -20,7 +20,8 @@ rooted at `server.js` and `migrate.js`, with `drizzle/`, `providers.d/`,
 `package.json`, and `release-manifest.json`. YouEye installs that archive
 without Pointer Web, separates management and inference listeners, and owns
 database, secrets, TLS trust, service wiring, health, backup, restore, and
-updates. Release construction and signing remain YouEye-Infra operations.
+updates. Release construction and publication are platform operations; releases
+are unsigned and checked by SHA-256 digest.
 
 ## Host prerequisites
 
@@ -63,8 +64,8 @@ dependency resolution, network fallback, or an ambiguous output directory.
 
 The resulting YouEye headless artifact contains the bundled server and
 migration runner, the pinned Bun runtime, migrations, provider manifests,
-package metadata, and a source-bound release manifest. It remains unsigned;
-YouEye-Infra separately owns any signing and managed host executes the bundled
+package metadata, and a source-bound release manifest. It is unsigned and
+checked by SHA-256 digest; the managed host executes the bundled
 runtime without downloading an unpinned language runtime.
 
 The managed build keeps the current `youeye.build.v2` manifest, build kind,
