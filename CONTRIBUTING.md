@@ -50,42 +50,20 @@ product identity. Keep environment-specific deployment histories in private
 operator documentation. Schema IDs identify published schema documents; changes
 must preserve schema constraints and be checked against consumers.
 
-## Release version identity
+## Versions and releases
 
-New releases use `X.Y.Z[-token.N]`, retaining all three numeric positions.
-Development targets the next Stable base: after `0.5.3`, use
-`0.5.4-dev.N`; private main uses `alpha.N`, public Beta uses `beta.N`, and
-feature releases use a collision-checked branch token with a numeric counter.
-The exact case-sensitive Git branch remains separate from the display token.
-Select source/channel before comparing versions; `.10` follows `.9`.
+`VERSION` holds the release line (`X.Y.Z`). Every build is `X.Y.Z-rc.N`: the
+release tool picks the next free `N` from this repository's release tags and
+passes the full version to `.youeye/build/pointer` as `YOUEYE_VERSION`; the
+build fails without it. Nothing in the source tree carries the build number;
+the workspace `package.json` versions are the placeholder `0.0.0`. The build
+inlines the version into `server.js` and writes it into `release-manifest.json`,
+which it also emits as the release's `pointer-build-contract.json`.
 
-The release coordinator reserves identities with a stable request key before
-building. Retry the same frozen attempt; never repurpose a used identity or
-rewrite historical tags, locks or artifact versions. Failed attempts may leave
-gaps. Source-only preparation does not start builds or publication, and the
-existing branch/merge workflow remains in effect.
-
-This product retains its own version sequence; it is not numbered from the
-YouEye core release group. Keep every registered source version authority
-consistent. Unchanged published payloads retain their original provenance.
-
-## Artifact promotion
-
-`.youeye/release/artifact-promotion.json` opts this source into external
-product release metadata. Source/package versions remain immutable build identity.
-The platform records `product-build.json` once, binding the original source commit,
-artifact SHA-256 digests and install contract; `product-release.json` assigns
-independent product versions and channels to that unchanged build. Release
-metadata is published unsigned; integrity comes from the SHA-256 digests, fetched
-over HTTPS. Promotion does not run source version preparation, repackage archives
-or repeat unchanged builds.
-Legacy releases keep their existing contract. New source/dependency/toolchain or
-build-configuration changes require a new candidate and relevant validation.
-
-Runtime consumers read the platform's accepted protected release projection
-outside their code directory. Missing or invalid metadata reports an unknown
-release while preserving the original build version for diagnostics. A metadata
-label alone never establishes payload integrity, schema readiness or acceptance.
+A build keeps its version on every channel (dev, alpha, beta, stable).
+Promotion copies the same bytes and never rebuilds. Release tags are
+`v<version>`. A release holds `standalone.tar`, `pointer-build-contract.json`
+and `product-release.json`, which binds them by SHA-256 and the source git tree.
 
 ## Interface text
 

@@ -7,15 +7,15 @@ require() { command -v "$1" >/dev/null 2>&1 || fail "required command is missing
 source_dir=${YOUEYE_SOURCE_DIR:-}
 output_dir=${YOUEYE_OUTPUT_DIR:-}
 work_dir=${YOUEYE_WORK_DIR:-}
-source_commit=${YOUEYE_SOURCE_COMMIT:-}
+source_tree=${YOUEYE_SOURCE_TREE:-}
 source_epoch=${SOURCE_DATE_EPOCH:-}
 [[ -d $source_dir ]] || fail 'YOUEYE_SOURCE_DIR must be an existing source directory'
 [[ -n $output_dir && $output_dir != / && $output_dir != "$source_dir" ]] || fail 'YOUEYE_OUTPUT_DIR must be dedicated'
 [[ -n $work_dir && $work_dir != / && $work_dir != "$source_dir" ]] || fail 'YOUEYE_WORK_DIR must be dedicated'
-[[ $source_commit =~ ^[0-9a-f]{40}$ ]] || fail 'YOUEYE_SOURCE_COMMIT must be exact'
+[[ -z $source_tree || $source_tree =~ ^[0-9a-f]{40}$ ]] || fail 'YOUEYE_SOURCE_TREE must be a 40-hex git tree'
 [[ $source_epoch =~ ^[1-9][0-9]*$ ]] || fail 'SOURCE_DATE_EPOCH must be positive'
-if [[ -d $source_dir/.git ]]; then
-  [[ $(git -C "$source_dir" rev-parse HEAD) == "$source_commit" ]] || fail 'checked-out commit does not match contract'
+if [[ -e $source_dir/.git ]]; then
+  [[ -z $source_tree || $(git -C "$source_dir" rev-parse 'HEAD^{tree}') == "$source_tree" ]] || fail 'checked-out tree does not match YOUEYE_SOURCE_TREE'
 else
   # Permanent executor receives a credential-free git-archive export, not a live checkout.
   [[ -f $source_dir/apps/server/package.json ]] || fail 'credential-free source export is incomplete'
@@ -29,17 +29,15 @@ require tar
 [[ $(bun --version) == 1.4.2 ]] || fail 'Bun 1.4.2 is required'
 [[ -n ${YOUEYE_PNPM_STORE_DIR:-} && -d $YOUEYE_PNPM_STORE_DIR ]] || fail 'reviewed pnpm store is required'
 
-export LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC YOUEYE_SOURCE_BRANCH YOUEYE_SOURCE_REPOSITORY
-# The recipe supplies the exact source commit. A checkout URL is optional and is
-# recorded separately from the public product identity in release-manifest.json.
-node --input-type=module -e 'const { buildSourceRepository } = await import(process.argv[1]); buildSourceRepository(process.env.YOUEYE_SOURCE_REPOSITORY);' "file://$source_dir/scripts/release-identity.mjs"
-if [[ -z ${YOUEYE_SOURCE_BRANCH:-} ]]; then
-  if [[ -d $source_dir/.git ]]; then
-    YOUEYE_SOURCE_BRANCH=$(git -C "$source_dir" branch --show-current)
-  else
-    YOUEYE_SOURCE_BRANCH=detached
-  fi
-fi
+export LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
+# VERSION holds the release line X.Y.Z; the release tool passes the full build version
+# (X.Y.Z-rc.N) as YOUEYE_VERSION. Nothing in the source tree carries the build number.
+line=$(tr -d '[:space:]' < "$source_dir/VERSION" 2>/dev/null || true)
+[[ $line =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'VERSION must hold the release line X.Y.Z'
+[[ -n ${YOUEYE_VERSION:-} ]] || fail "YOUEYE_VERSION is required: the full build version, e.g. $line-rc.1 (Tools/release/app-release assigns it)"
+[[ $YOUEYE_VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[a-z][a-z0-9]*\.[1-9][0-9]*)?$ ]] || fail "YOUEYE_VERSION must be X.Y.Z[-token.N]; got $YOUEYE_VERSION"
+[[ ${YOUEYE_VERSION%%-*} == "$line" ]] || fail "YOUEYE_VERSION $YOUEYE_VERSION is not on the VERSION line $line"
+export YOUEYE_VERSION
 stage=$work_dir/pointer-standalone
 rm -rf -- "$stage"
 install -d -m 0755 "$stage" "$output_dir"
@@ -49,7 +47,7 @@ pnpm public-source:check
 pnpm typecheck
 pnpm contracts:check
 pnpm test:unit
-bun build apps/server/src/index.ts --target=bun --external=@pointer/engine --outfile="$stage/server.js"
+bun build apps/server/src/index.ts --target=bun --external=@pointer/engine --define "process.env.YOUEYE_VERSION=\"$YOUEYE_VERSION\"" --outfile="$stage/server.js"
 bun build apps/server/scripts/migrate.ts --target=bun --outfile="$stage/migrate.js"
 bun build apps/server/scripts/transition-managed-identity.ts --target=bun --outfile="$stage/transition-managed-identity.js"
 bun build apps/server/scripts/import-provider-state.ts --target=bun --external=@pointer/engine --outfile="$stage/import-provider-state.js"
@@ -94,4 +92,6 @@ tar --sort=name --format=posix --numeric-owner --owner=0 --group=0 \
   -C "$stage" -cf "$temporary" .
 tar -tf "$temporary" ./bun ./server.js ./migrate.js ./transition-managed-identity.js ./import-provider-state.js ./ui/manifest.json ./release-manifest.json >/dev/null
 mv -- "$temporary" "$output"
+# The release's build contract: the same release-manifest.json, bound by product-release.json.
+install -m 0644 "$stage/release-manifest.json" "$output_dir/pointer-build-contract.json"
 sha256sum "$output"

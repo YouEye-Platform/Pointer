@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-30
 
-**Authoritative repository:** `https://git.potemk.in/potemsla/Pointer`
+**Authoritative repository:** `the development forge repository `Pointer``
 
 **Implementation branch:** `main`
 
@@ -57,7 +57,7 @@ Implementation and production acceptance are complete.
 
 ## 1. Executive outcome
 
-Create a new pnpm monorepo in `potemsla/Pointer` with one product identity:
+Create a new pnpm monorepo in `Pointer` with one product identity:
 Pointer.
 
 Recommended source layout:
@@ -108,7 +108,7 @@ migration:
 1. The product name is **Pointer**.
 2. `Pointer-Lite`, `Pointer-WebUI` and `Pointer Duo` are not active product
    identities in the new repository.
-3. The new `potemsla/Pointer` repository becomes authoritative after its source,
+3. The new `Pointer` repository becomes authoritative after its source,
    deployed validation and production acceptance gates pass.
 4. The new repository does not need the complete Git history of either current
    repository.
@@ -133,7 +133,7 @@ The implementation worker must revalidate these facts before importing source.
 
 Pointer server donor:
 
-- repository: `https://git.potemk.in/potemsla/Pointer-Lite.git`;
+- repository: `the development forge repository `Pointer-Lite``;
 - branch: `main`;
 - observed head:
   `9435350c95d6a2bd5be2653b543c0490b410bffc`;
@@ -142,7 +142,7 @@ Pointer server donor:
 
 Pointer web donor:
 
-- repository: `https://git.potemk.in/potemsla/Pointer-WebUI.git`;
+- repository: `the development forge repository `Pointer-WebUI``;
 - branch: `main`;
 - observed head:
   `8acead41203f51ea5728601be8f634658cd4b87c`;
@@ -151,7 +151,7 @@ Pointer web donor:
 
 New repository:
 
-- repository: `https://git.potemk.in/potemsla/Pointer.git`;
+- repository: `the development forge repository `Pointer``;
 - observed on 2026-07-30 with no advertised `main`, `master` or tags.
 
 ### 3.2 Current toolchain
@@ -1031,7 +1031,7 @@ All retained evidence must be sensitivity-checked.
 
 The product owner authorized this complete task:
 
-> Initialize the empty `potemsla/Pointer` repository as a Pointer-only pnpm
+> Initialize the empty `Pointer` repository as a Pointer-only pnpm
 > monorepo on `main`; import the exact current tracked server and web source
 > snapshots without their Git histories; organize server, web, CLI and
 > contracts under the target layout; consolidate the workspace on TypeScript

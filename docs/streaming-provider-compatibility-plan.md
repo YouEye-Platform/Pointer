@@ -4,7 +4,7 @@
 
 **Date:** 2026-07-31
 
-**Authoritative repository:** `https://git.potemk.in/potemsla/Pointer`
+**Authoritative repository:** `the development forge repository `Pointer``
 
 **Implementation branch:** `main`
 
