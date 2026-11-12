@@ -76,7 +76,7 @@ Commit the spec and generated TypeScript together. Do not hand-edit
 ## Release artifacts
 
 `VERSION` holds the release line (`X.Y.Z`); change it only to start the next
-line. Each build gets `X.Y.Z-rc.N` from the release tool through
+line. Each build gets `X.Y.Z-dev.N` from the release tool through
 `YOUEYE_VERSION`; the standalone artifact scripts add the source commit suffix.
 No version is written into `package.json` or other tracked files.
 

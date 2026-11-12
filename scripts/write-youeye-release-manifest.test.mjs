@@ -31,9 +31,9 @@ async function runManifest(directory, version) {
 describe("YouEye release manifest", () => {
   test("records the build version, public identity and shared schema version", async () => {
     const directory = outputDirectory();
-    expect((await runManifest(directory, "0.6.1-rc.3")).exitCode).toBe(0);
+    expect((await runManifest(directory, "0.6.1-dev.3")).exitCode).toBe(0);
     const manifest = JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8"));
-    expect(manifest.version).toBe("0.6.1-rc.3");
+    expect(manifest.version).toBe("0.6.1-dev.3");
     expect(manifest.repository).toBe(PUBLIC_CANONICAL_REPOSITORY);
     expect(manifest).not.toHaveProperty("branch");
     expect(manifest).not.toHaveProperty("commit");
@@ -44,7 +44,7 @@ describe("YouEye release manifest", () => {
   });
 
   test("refuses to write without a valid YOUEYE_VERSION", async () => {
-    for (const version of [undefined, "", "latest", "0.6.1-rc.0", "v0.6.1"]) {
+    for (const version of [undefined, "", "latest", "0.6.1-dev.0", "0.6.1", "0.6.1-rc.3", "v0.6.1"]) {
       const result = await runManifest(outputDirectory(), version);
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toContain("YOUEYE_VERSION");
