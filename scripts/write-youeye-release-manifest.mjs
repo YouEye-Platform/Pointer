@@ -3,12 +3,12 @@ import { resolve } from "node:path";
 import { PUBLIC_CANONICAL_REPOSITORY } from "./release-identity.mjs";
 import { LATEST_POINTER_SCHEMA_VERSION } from "../apps/server/src/db/latest-schema.mjs";
 
-// The build version (X.Y.Z-rc.N) comes from YOUEYE_VERSION, assigned by the release tool.
-const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[a-z][a-z0-9]*\.[1-9][0-9]*)?$/;
+// The build version (X.Y.Z-dev.N) comes from YOUEYE_VERSION, assigned by the release tool.
+const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-dev\.[1-9][0-9]*$/;
 const output = process.argv[2];
 if (!output) throw new Error("output directory is required");
 const version = process.env.YOUEYE_VERSION || "";
-if (!VERSION.test(version)) throw new Error("YOUEYE_VERSION (X.Y.Z[-token.N]) is required");
+if (!VERSION.test(version)) throw new Error("YOUEYE_VERSION (X.Y.Z-dev.N) is required");
 writeFileSync(resolve(output, "release-manifest.json"), `${JSON.stringify({
   schemaVersion: 1,
   component: "pointer",
