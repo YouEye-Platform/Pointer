@@ -42,7 +42,7 @@ export function releaseMetadata() {
     branch,
     commit,
     builtAt: new Date().toISOString(),
-    version: `${JSON.parse(readFileSync(resolve(root, "apps/server/package.json"), "utf8")).version}+${commit.slice(0, 12)}`,
+    version: `${process.env.YOUEYE_VERSION || readFileSync(resolve(root, "VERSION"), "utf8").trim()}+${commit.slice(0, 12)}`,
   };
 }
 

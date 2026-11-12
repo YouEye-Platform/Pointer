@@ -18,50 +18,36 @@ function outputDirectory() {
   return directory;
 }
 
-async function runManifest(directory, sourceRepository) {
+async function runManifest(directory, version) {
+  const env = { ...process.env };
+  delete env.YOUEYE_VERSION;
+  if (version !== undefined) env.YOUEYE_VERSION = version;
   const child = Bun.spawn(["bun", script, directory], {
-    cwd: resolve(import.meta.dir, ".."),
-    env: {
-      ...process.env,
-      YOUEYE_SOURCE_COMMIT: "a".repeat(40),
-      YOUEYE_SOURCE_BRANCH: "train",
-      ...(sourceRepository === undefined ? {} : { YOUEYE_SOURCE_REPOSITORY: sourceRepository }),
-    },
-    stdout: "pipe",
-    stderr: "pipe",
+    cwd: resolve(import.meta.dir, ".."), env, stdout: "pipe", stderr: "pipe",
   });
   return { exitCode: await child.exited, stderr: await new Response(child.stderr).text() };
 }
 
 describe("YouEye release manifest", () => {
-  test("retains the private builder's logical source ID separately from public product identity", async () => {
+  test("records the build version, public identity and shared schema version", async () => {
     const directory = outputDirectory();
-    expect((await runManifest(directory, "Pointer")).exitCode).toBe(0);
+    expect((await runManifest(directory, "0.6.1-rc.3")).exitCode).toBe(0);
     const manifest = JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8"));
+    expect(manifest.version).toBe("0.6.1-rc.3");
     expect(manifest.repository).toBe(PUBLIC_CANONICAL_REPOSITORY);
-    expect(manifest.sourceRepository).toBe("Pointer");
-    expect(manifest.branch).toBe("train");
-    expect(manifest.commit).toBe("a".repeat(40));
-  });
-  test("writes the public canonical identity and shared schema version", async () => {
-    const directory = outputDirectory();
-    expect((await runManifest(directory, PUBLIC_CANONICAL_REPOSITORY)).exitCode).toBe(0);
-    const manifest = JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8"));
-    expect(manifest.repository).toBe(PUBLIC_CANONICAL_REPOSITORY);
+    expect(manifest).not.toHaveProperty("branch");
+    expect(manifest).not.toHaveProperty("commit");
     expect(manifest.runtime.schemaVersion).toBe(LATEST_POINTER_SCHEMA_VERSION);
     expect(manifest.runtime.bun).toBe('1.4.2 (bundled)');
     expect(manifest.runtime.engine).toEqual({package: '@bitkyc08/opencodex', version: '2.79.0'});
     expect(manifest.entrypoints.ui).toBe('ui/manifest.json');
   });
 
-  test("does not fabricate absent checkout provenance and refuses unrelated sources", async () => {
-    const directory = outputDirectory();
-    const missing = await runManifest(directory, undefined);
-    expect(missing.exitCode).toBe(0);
-    expect(JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8")).sourceRepository).toBe(null);
-
-    const invalid = await runManifest(outputDirectory(), "https://git.example.test/team/Other");
-    expect(invalid.exitCode).not.toBe(0);
-    expect(invalid.stderr).toContain("does not match");
+  test("refuses to write without a valid YOUEYE_VERSION", async () => {
+    for (const version of [undefined, "", "latest", "0.6.1-rc.0", "v0.6.1"]) {
+      const result = await runManifest(outputDirectory(), version);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("YOUEYE_VERSION");
+    }
   });
 });

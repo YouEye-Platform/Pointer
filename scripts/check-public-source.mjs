@@ -16,8 +16,8 @@ async function scan(dir) {
     if (bytes.includes(0)) continue;
     const lines = bytes.toString('utf8').split('\n');
     lines.forEach((line, index) => {
-      // Forgejo checkout links are projected by Infra; service addresses are not.
-      const text = line.replace(/git[.]potemk[.]in\/potemsla\/[\w.-]+/g, 'repository');
+      // Historical Forgejo repository links in docs are tolerated; service addresses are not.
+      const text = line.replace(/git[.]potemk[.]in\/[\w.-]+\/[\w.-]+/g, 'repository');
       if (/\b(?:[\w-]+\.)*potemk[.]in\b/i.test(text)) violations.push(`${path.relative(root, filename)}:${index + 1}: deployment-specific hostname`);
     });
   }

@@ -1,4 +1,4 @@
-import { version } from "../../package.json";
+const version = process.env.POINTER_COMPONENT_VERSION?.trim() || "0.0.0";
 import { fetchProviderModels } from "../../src/providers/model-discovery";
 import { providerAuthHeaders } from "../../src/providers/auth-headers";
 import { selectGatewayProxyRequest, selectGatewayProxyResponse } from "../../src/gateway/protocol/v1/runtime-proxy";

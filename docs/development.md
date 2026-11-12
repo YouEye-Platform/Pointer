@@ -75,11 +75,10 @@ Commit the spec and generated TypeScript together. Do not hand-edit
 
 ## Release artifacts
 
-For a release-only version bump, change `apps/server/package.json` once. The
-managed manifest reads that version directly; standalone artifact metadata
-adds the exact source commit suffix. Commit, branch and build provenance are
-generated rather than edited by hand. A version bump does not require changing
-the build recipe or duplicating the version in documentation.
+`VERSION` holds the release line (`X.Y.Z`); change it only to start the next
+line. Each build gets `X.Y.Z-rc.N` from the release tool through
+`YOUEYE_VERSION`; the standalone artifact scripts add the source commit suffix.
+No version is written into `package.json` or other tracked files.
 
 Schema versions describe database compatibility, not release numbers. When
 adding a numbered migration, also update

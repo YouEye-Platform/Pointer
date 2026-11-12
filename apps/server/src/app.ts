@@ -1,4 +1,3 @@
-import { installedRelease } from "./services/installed-release";
 import { Hono } from "hono";
 import {
   POINTER_CAPABILITY_CONTRACT_VERSION,
@@ -142,7 +141,7 @@ function commonApp(
   app.get("/healthz", async (c) =>
     c.json({
       status: "ok",
-      version: (await installedRelease("pointer", buildInfo.version))?.version ?? "unknown",
+      version: buildInfo.version,
       surface,
       build: buildInfo,
       timestamp: new Date().toISOString(),

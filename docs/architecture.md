@@ -67,14 +67,10 @@ Both artifacts are built from the same clean commit. Each contains
 sidecar. Health/version responses expose component, version, repository,
 branch, commit and build time so mixed releases can be detected.
 
-The source-owned `.youeye/release/artifact-promotion.json` declaration also
-requires the publisher to attach unsigned product build and release metadata
-that binds the Pointer archive by SHA-256 digest.
-YouEye can then verify the complete Pointer release through its protected
-release cache before publication and retain an installed product receipt.
-The native archive and its SHA-256 checksum remain available to older
-readers. This packaging declaration changes neither the database schema nor the
-application payload contract; it does not require reinstalling Pointer.
+The YouEye release (`.youeye/build/pointer`) builds `standalone.tar` for the
+build version `X.Y.Z-rc.N` given as `YOUEYE_VERSION`. Its `product-release.json`
+binds the archive and `pointer-build-contract.json` by SHA-256 and the source
+git tree; promotion between channels copies the same bytes without rebuilding.
 
 Endpoint wire profiles and reversible semantic tools are documented in
 [gateway capabilities](gateway-capabilities.md).
