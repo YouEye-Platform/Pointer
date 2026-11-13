@@ -36,13 +36,13 @@ export async function readiness(surface: PointerSurface) {
     };
   }
 
-  const [schemaVersion] = await db
-    .select({ version: schema.pointerSchemaVersions.version })
+  // The database must be exactly at this release's schema: an older or newer recorded version is incompatible
+  // (a pre-release database still carries a version-1 row next to its later ones).
+  const [recorded] = await db
+    .select({ version: sql<number>`max(${schema.pointerSchemaVersions.version})` })
     .from(schema.pointerSchemaVersions)
-    .where(eq(schema.pointerSchemaVersions.version, LATEST_POINTER_SCHEMA_VERSION))
-    .limit(1)
     .catch(() => []);
-  if (!schemaVersion) {
+  if (Number(recorded?.version) !== LATEST_POINTER_SCHEMA_VERSION) {
     checks.push({
       code: "schema_incompatible",
       status: "error",

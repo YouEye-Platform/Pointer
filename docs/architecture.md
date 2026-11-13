@@ -85,7 +85,7 @@ one attempt.
 
 Successful unchanged inventories retain their source rows and original
 observation provenance while advancing the separate validation timestamp. The
-legacy catalog projection compares a versioned content fingerprint under the
+model_catalog projection compares a versioned content fingerprint under the
 catalog write lock; identical inputs preserve model/alias/benchmark rows after checking the capability
 fields that provider discovery can independently change. Changed
 inputs replace the projection atomically. Generation reconciliation still runs

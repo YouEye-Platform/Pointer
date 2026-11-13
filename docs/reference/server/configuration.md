@@ -85,14 +85,10 @@ deployment configuration cannot bypass those checks.
 
 ## Database schema
 
-Drizzle Kit is a development schema tool:
-
-```bash
-bun run db:generate   # generate SQL migrations from schema.ts
-bun run db:push       # inspect/bootstrap a disposable development schema only
-```
-
-Production deployments never use `db:push`. Apply the packaged current-schema
-baseline and reviewed SQL migrations through `scripts/migrate.ts`, using a
-database owner or dedicated migration role, only after backup restoration has
-been rehearsed; see [deployment.md](../../deployment.md).
+Every database, development or production, is created and upgraded by
+`scripts/migrate.ts` (`bun run db:migrate --expect-database <name>`): it applies
+`drizzle/0001_baseline.sql` to an empty database and then each later numbered
+migration once. Migrations are written by hand; see "Database schema and
+migrations" in [development.md](../../development.md). In production, run it
+with a database owner or dedicated migration role, only after backup
+restoration has been rehearsed; see [deployment.md](../../deployment.md).

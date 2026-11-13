@@ -12,7 +12,7 @@ The product has one public contract generation: V1. New implementations replace 
   `/v1beta/models/*` GenerateContent surface.
 - The management catalog is `GET /api/catalog` and `GET /api/catalog/detail?slug=...` with `contractVersion: "1"`.
 - The gateway has one typed IR under `apps/server/src/gateway/protocol/v1` and always reports engine `v1`.
-- There is no alternate gateway engine, shadow execution, duplicate paid request, or legacy catalog response.
+- There is no alternate gateway engine, shadow execution, duplicate paid request, or second catalog response format.
 
 ## Backend authority
 
@@ -55,7 +55,7 @@ createdb pointer_dev
 export DATABASE_URL=postgresql:///pointer_dev
 export JWT_SECRET=<development-secret>
 export ENCRYPTION_SECRET=<development-secret>
-pnpm db:push
+pnpm db:migrate --expect-database pointer_dev
 pnpm test
 pnpm build
 pnpm dev

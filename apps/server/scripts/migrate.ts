@@ -79,10 +79,13 @@ const migrationFiles = (await readdir(migrationDirectory))
   .filter((entry): entry is { name: string; version: number } => entry !== null)
   .sort((a, b) => a.version - b.version);
 
-const baseline = migrationFiles.find((migration) => migration.version === 0);
-const incrementalMigrations = migrationFiles.filter((migration) => migration.version > 0);
-const migrationSetVersion = incrementalMigrations.at(-1)?.version ?? 0;
-if (!baseline || migrationSetVersion !== LATEST_POINTER_SCHEMA_VERSION) {
+// Migrations are numbered 1..N without gaps. 0001_baseline.sql creates the whole
+// schema of a fresh database; the next schema change is 0002_<name>.sql.
+if (
+  migrationFiles.length === 0 ||
+  migrationFiles.some((migration, index) => migration.version !== index + 1) ||
+  migrationFiles.at(-1)?.version !== LATEST_POINTER_SCHEMA_VERSION
+) {
   throw new Error("Release migration set does not match the required schema version");
 }
 const latestVersion = LATEST_POINTER_SCHEMA_VERSION;
@@ -123,15 +126,8 @@ try {
         );
       }
 
-      if (state.kind === "fresh") {
-        const baselineSql = await readFile(new URL(baseline.name, migrationDirectory), "utf8");
-        await transaction.unsafe(baselineSql);
-        console.log(`Applied ${baseline.name}`);
-      }
-
-      const firstVersion = state.kind === "versioned" ? state.currentVersion + 1 : 1;
-      const selected = incrementalMigrations.filter(
-        (migration) => migration.version >= firstVersion
+      const selected = migrationFiles.filter(
+        (migration) => migration.version > state.currentVersion
       );
       for (const migration of selected) {
         const migrationSql = await readFile(

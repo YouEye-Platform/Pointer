@@ -181,7 +181,7 @@
         "attribution": { "type": ["string", "null"] }
       }
     },
-    "legacyPresentation": {
+    "modelCatalogPresentation": {
       "type": "object",
       "additionalProperties": false,
       "required": ["entityId", "currentName", "currentCreator", "currentCreatorIconKey", "currentLogoUrl", "iconOutcome"],
@@ -197,7 +197,7 @@
     "corpus": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["corpusVersion", "generatedAt", "observations", "entities", "decisions", "organizations", "assets", "providerRoutes", "benchmarkLinks", "aliases", "sources", "legacyPresentation"],
+      "required": ["corpusVersion", "generatedAt", "observations", "entities", "decisions", "organizations", "assets", "providerRoutes", "benchmarkLinks", "aliases", "sources", "modelCatalogPresentation"],
       "properties": {
         "corpusVersion": { "const": "1" },
         "generatedAt": { "type": "string", "format": "date-time" },
@@ -210,7 +210,7 @@
         "benchmarkLinks": { "type": "array", "items": { "$ref": "#/$defs/benchmarkLink" } },
         "aliases": { "type": "array", "items": { "$ref": "#/$defs/alias" } },
         "sources": { "type": "array", "items": { "$ref": "#/$defs/sourceState" } },
-        "legacyPresentation": { "type": "array", "items": { "$ref": "#/$defs/legacyPresentation" } }
+        "modelCatalogPresentation": { "type": "array", "items": { "$ref": "#/$defs/modelCatalogPresentation" } }
       }
     },
     "apiItemFields": {

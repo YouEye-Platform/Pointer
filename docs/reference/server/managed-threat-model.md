@@ -27,7 +27,7 @@ Pointer credentials.
 | Partial/crashed provisioning | Transactional lifecycle changes and durable idempotent results |
 | Unsafe rotation | Prepare/commit/abort state machine, overlap, required delivery acknowledgement before commit |
 | Disabled or archived app continues inference | API-key middleware checks installation, instance, key lifecycle, and rotation state on every request |
-| Managed resource changed through legacy route | Managed instance/key mutation guards and permission middleware on all management domains |
+| Managed resource changed through an ordinary management route | Managed instance/key mutation guards and permission middleware on all management domains |
 | Group deletion breaks applications | Default and linked-group deletion guards; historical group identity retained on archive |
 | Trust or schema drift | Startup persisted-trust check and `/readyz` checks for schema, service principal, integration, default group, registry, and catalog |
 | Sensitive operational logs | Safe fixed log messages, request IDs, allowlisted audit state, no raw assertions or request bodies |

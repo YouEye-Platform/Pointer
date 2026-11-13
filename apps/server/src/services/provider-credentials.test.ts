@@ -5,7 +5,7 @@ import {
 } from "./provider-credential-codec";
 
 describe("provider credential envelopes", () => {
-  test("preserves legacy API keys as opaque strings", () => {
+  test("keeps API keys as opaque strings", () => {
     expect(parseProviderCredential("test-api-key")).toEqual({
       kind: "api-key",
       value: "test-api-key",

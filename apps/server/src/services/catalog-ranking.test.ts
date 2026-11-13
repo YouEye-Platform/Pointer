@@ -30,12 +30,12 @@ describe("catalog benchmark ranking", () => {
   test("uses equal-weight source percentiles instead of source priority", () => {
     const result = calculateCatalogRankings([
       { id: "balanced", benchmarks: [benchmark("benchlm", 2, 90), benchmark("arena", 1, 1500)] },
-      { id: "legacy-leader", benchmarks: [benchmark("benchlm", 1, 95), benchmark("arena", 3, 1400)] },
+      { id: "former-leader", benchmarks: [benchmark("benchlm", 1, 95), benchmark("arena", 3, 1400)] },
       { id: "arena-second", benchmarks: [benchmark("arena", 2, 1450)] },
     ], [descriptor("benchlm", 20), descriptor("arena", 30)]);
 
     expect(result.recommendedRankings.get("balanced")).toMatchObject({ rank: 1, coverage: 2, eligibleSources: 2 });
-    expect(result.recommendedRankings.get("legacy-leader")).toMatchObject({ rank: 2, coverage: 2 });
+    expect(result.recommendedRankings.get("former-leader")).toMatchObject({ rank: 2, coverage: 2 });
     expect(result.recommendedRankings.get("arena-second")).toMatchObject({ rank: 3, coverage: 1 });
   });
 

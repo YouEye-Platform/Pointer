@@ -26,7 +26,7 @@ const manifest: ProviderManifest = {
     issuer: "https://auth.example.test",
     clientId: "pointer-codex-test",
   },
-  endpoints: { responses: "/legacy/responses" },
+  endpoints: { responses: "/wire/responses" },
   gateway: {
     operations: {
       generate: { format: "responses", endpoint: "/gateway/responses" },

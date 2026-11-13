@@ -107,7 +107,7 @@ app.get("/:id", async (c) => {
       outputPrice: schema.providerModels.outputPrice,
       supportsTools: schema.providerModels.supportsTools,
       rawMetadata: schema.providerAccountModels.rawMetadata,
-      legacyMetadata: schema.providerModels.rawMetadata,
+      providerMetadata: schema.providerModels.rawMetadata,
       discoveredAt: schema.providerAccountModels.discoveredAt,
       supportsVision: schema.providerModels.supportsVision,
       supportsStreaming: schema.providerModels.supportsStreaming,
@@ -140,11 +140,11 @@ app.get("/:id", async (c) => {
       return parsed.kind === "oauth2" ? credentialStatus(parsed.value)
         : { status: parsed.kind === "api-key" ? "connected" : "reconnect_required", refreshable: false };
     })() : { status: "not_connected", refreshable: false },
-    models: models.map(({ rawMetadata, legacyMetadata, discoveredAt, ...model }) => {
+    models: models.map(({ rawMetadata, providerMetadata, discoveredAt, ...model }) => {
       const fallback = manifest?.models?.capabilityFallbacks?.find(row => row.modelId.toLowerCase() === model.rawModelId.toLowerCase())?.supportsTools;
       const evidence = typeof account.capabilityOverrides.tools === "boolean"
         ? toolCapability(account.capabilityOverrides.tools, "endpoint.override", account.updatedAt.toISOString())
-        : persistedToolCapability(rawMetadata ?? legacyMetadata, rawMetadata != null ? null : model.supportsTools, fallback, discoveredAt?.toISOString() ?? null);
+        : persistedToolCapability(rawMetadata ?? providerMetadata, rawMetadata != null ? null : model.supportsTools, fallback, discoveredAt?.toISOString() ?? null);
       return { ...model, supportsTools: toolCapabilityValue(evidence), capabilityEvidence: { tools: evidence } };
     }),
   });

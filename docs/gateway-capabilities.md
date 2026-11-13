@@ -98,9 +98,9 @@ identity, pricing or endpoint URLs, and an explicit primary denial wins.
 Discovery retains prior explicit evidence when later metadata omits it; it never
 retains an inferred negative as an explicit denial.
 
-Schema 23 separates discovered metadata per provider account and reconciles old
-provider-model false defaults only when raw evidence lacks an explicit claim.
-Routing also reconciles legacy raw evidence without using model-name heuristics.
+Discovered metadata is kept per provider account. A stored provider-model false
+counts as unknown when raw evidence lacks an explicit claim, and routing reads
+raw evidence without using model-name heuristics.
 Account discovery and overrides do not leak between endpoints sharing a model ID.
 
 Go discovery preserves the validated effort values in the existing metadata

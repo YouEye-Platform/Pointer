@@ -158,9 +158,9 @@ export const BROKEN_CATALOG_CORPUS_FIXTURE: CatalogCorpus = {
     { id: "stale/model", slug: "stale--model", preferredName: "Stale Model", organizationId: null, active: true },
   ],
   decisions: [
-    { observationId: "obs_openrouter_glm_5_1", entityId: "z-ai/glm-5.1", state: "linked", method: "native_id", confidence: 1, candidateEntityIds: [], evidence: [], resolverVersion: "legacy" },
-    { observationId: "obs_deepinfra_glm_5_1", entityId: "provider/glm-5-1", state: "linked", method: "structured_match", confidence: 0.5, candidateEntityIds: [], evidence: [], resolverVersion: "legacy" },
-    { observationId: "obs_livebench_unknown", entityId: null, state: "ambiguous", method: "none", confidence: 0, candidateEntityIds: ["z-ai/glm-5.1", "provider/glm-5-1"], evidence: [], resolverVersion: "legacy" },
+    { observationId: "obs_openrouter_glm_5_1", entityId: "z-ai/glm-5.1", state: "linked", method: "native_id", confidence: 1, candidateEntityIds: [], evidence: [], resolverVersion: "model-catalog-export-v1" },
+    { observationId: "obs_deepinfra_glm_5_1", entityId: "provider/glm-5-1", state: "linked", method: "structured_match", confidence: 0.5, candidateEntityIds: [], evidence: [], resolverVersion: "model-catalog-export-v1" },
+    { observationId: "obs_livebench_unknown", entityId: null, state: "ambiguous", method: "none", confidence: 0, candidateEntityIds: ["z-ai/glm-5.1", "provider/glm-5-1"], evidence: [], resolverVersion: "model-catalog-export-v1" },
   ],
   organizations: [{ id: "org_z_ai", name: "Z.ai", aliases: ["z-ai", "zhipuai"], websiteUrl: "https://z.ai" }],
   assets: [],
@@ -185,7 +185,7 @@ export const BROKEN_CATALOG_CORPUS_FIXTURE: CatalogCorpus = {
     { sourceId: "openrouter", health: "healthy", lastAttemptAt: "2026-07-14T00:00:00.000Z", lastSuccessAt: "2026-07-14T00:00:00.000Z", recordCount: 347, errorCode: null, errorMessage: null },
     { sourceId: "livebench", health: "stale", lastAttemptAt: "2026-07-14T00:00:00.000Z", lastSuccessAt: "2026-07-13T00:00:00.000Z", recordCount: 195, errorCode: "upstream", errorMessage: "Source returned HTTP 400" },
   ],
-  legacyPresentation: [
+  modelCatalogPresentation: [
     { entityId: "z-ai/glm-5.1", currentName: "Z.ai: GLM 5.1", currentCreator: "z-ai", currentCreatorIconKey: "z-ai", currentLogoUrl: null, iconOutcome: "icon_key" },
     { entityId: "provider/glm-5-1", currentName: "GLM 5 1", currentCreator: null, currentCreatorIconKey: null, currentLogoUrl: null, iconOutcome: "fallback" },
     { entityId: "benchmark/glm-5", currentName: "Glm 5", currentCreator: null, currentCreatorIconKey: null, currentLogoUrl: null, iconOutcome: "fallback" },

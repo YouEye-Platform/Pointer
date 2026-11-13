@@ -26,10 +26,10 @@ from ordinary unit tests.
 
 The YouEye build is `.youeye/build/pointer`. It is headless, network-denied,
 and produces an unsigned `standalone.tar`. It selects the exact Bun1.4.2
-`youeye-pointer-build-kit-v2` and `pointer-opencodex-v2` validator. Preserve
+`youeye-pointer-build-kit` and `pointer-opencodex` validator. Preserve
 the OpenCodex2.79.0 pin, private engine state and matching UI content hashes.
 Keep the committed
-`youeye.build.v2` manifest, `build_kind`, validation/profile values, trust
+`youeye.build.v1` manifest, `build_kind`, validation/profile values, trust
 boundary, executor identity, and output role unchanged unless the owning
 platform changes them. Release metadata names Pointer's public product identity
 and records the optional checkout source separately; a private checkout does

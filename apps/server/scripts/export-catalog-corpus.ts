@@ -49,7 +49,7 @@ for (const row of sourceRecords) {
       provenance: payload.provenance,
       active: true,
     });
-    decisions.push({ observationId: id, entityId: payload.id, state: "linked", method: "native_id", confidence: 1, candidateEntityIds: [], evidence: ["Legacy reference model primary key"], resolverVersion: "legacy-export-v1" });
+    decisions.push({ observationId: id, entityId: payload.id, state: "linked", method: "native_id", confidence: 1, candidateEntityIds: [], evidence: ["Reference model primary key"], resolverVersion: "model-catalog-export-v1" });
   } else if (row.kind === "benchmark") {
     const payload = row.payload as NormalizedBenchmarkRecord;
     const id = stableId("obs", row.sourceId, row.recordKey);
@@ -67,7 +67,7 @@ for (const row of sourceRecords) {
       provenance: payload.provenance,
       active: true,
     });
-    decisions.push({ observationId: id, entityId, state: entityId ? "linked" : "unresolved", method: entityId ? "structured_match" : "none", confidence: entityId ? 0.5 : 0, candidateEntityIds: [], evidence: ["Legacy benchmark mapping"], resolverVersion: "legacy-export-v1" });
+    decisions.push({ observationId: id, entityId, state: entityId ? "linked" : "unresolved", method: entityId ? "structured_match" : "none", confidence: entityId ? 0.5 : 0, candidateEntityIds: [], evidence: ["Benchmark mapping"], resolverVersion: "model-catalog-export-v1" });
   }
 }
 
@@ -93,7 +93,7 @@ for (const row of providerModels) {
     provenance: null,
     active: true,
   });
-  decisions.push({ observationId: id, entityId: row.canonicalModelId, state: row.canonicalModelId ? "linked" : "unresolved", method: row.canonicalModelId ? "structured_match" : "none", confidence: row.canonicalModelId ? 0.5 : 0, candidateEntityIds: [], evidence: ["Legacy provider model mapping"], resolverVersion: "legacy-export-v1" });
+  decisions.push({ observationId: id, entityId: row.canonicalModelId, state: row.canonicalModelId ? "linked" : "unresolved", method: row.canonicalModelId ? "structured_match" : "none", confidence: row.canonicalModelId ? 0.5 : 0, candidateEntityIds: [], evidence: ["Provider model mapping"], resolverVersion: "model-catalog-export-v1" });
 }
 
 const creators = [...new Set(models.map((row) => row.creator).filter((value): value is string => Boolean(value)))].sort();
@@ -134,7 +134,7 @@ const corpus: CatalogCorpus = {
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
   })),
-  legacyPresentation: models.map((row) => ({
+  modelCatalogPresentation: models.map((row) => ({
     entityId: row.modelId,
     currentName: row.name,
     currentCreator: row.creator,

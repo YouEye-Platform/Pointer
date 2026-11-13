@@ -34,7 +34,7 @@ account response. Closing a completed modal cannot delete the stored credential 
 already removed the pending flow.
 
 The initial Grok adapter is shown as **Grok Subscription** and remains distinct from the normal
-**xAI** API-key provider. The legacy Codex UI continues to use its existing endpoints until Pointer server's
+**xAI** API-key provider. The Codex-specific UI continues to use its own endpoints until Pointer server's
 Codex adapter is migrated to the generic engine.
 
 ## Connected state

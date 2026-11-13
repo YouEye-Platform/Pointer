@@ -1,6 +1,5 @@
 import { beforeAll, afterAll, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
-import { readFile } from "node:fs/promises";
+import { eq } from "drizzle-orm";
 import { db, schema } from "../db";
 import { signJwt } from "../middleware/auth";
 import accounts from "../routes/provider-accounts";
@@ -54,13 +53,5 @@ describe.skipIf(process.env.CATALOG_POSTGRES_TEST !== "1")("endpoint tool eviden
     expect((await buildInstanceModelIndex(prefix+"-instance-a")).advertisedModels[0].capabilities.tools).toBe(false);
     expect((await put(ownerToken,{capabilityOverrides:{}})).status).toBe(200);
     expect((await buildInstanceModelIndex(prefix+"-instance-a")).advertisedModels[0].capabilities.tools).toBeNull();
-  });
-  test("migration reconciles inferred negatives and preserves explicit denial and positive evidence", async()=>{
-    const migration=await readFile(new URL("../../drizzle/0023_tool_capability_evidence.sql",import.meta.url),"utf8");
-    await db.execute(sql.raw(migration.slice(migration.indexOf("UPDATE provider_models"))));
-    const rows=await db.select().from(schema.providerModels).where(eq(schema.providerModels.providerId,prefix));
-    expect(rows.find(row=>row.id===prefix+"-shared")?.supportsTools).toBeNull();
-    expect(rows.find(row=>row.id===prefix+"-negative")?.supportsTools).toBe(false);
-    expect(rows.find(row=>row.id===prefix+"-positive")?.supportsTools).toBe(true);
   });
 });

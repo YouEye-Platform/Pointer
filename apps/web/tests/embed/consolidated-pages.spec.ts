@@ -20,7 +20,7 @@ test("merged routes preserve filters, encoded comparison IDs and current respons
         return Response.json({ kind: "models", entities: [{ id: fixture.comparedId, requests: 0, confidence: "low", successRate: null, avgLatency: null, p95Latency: null, avgTtfb: null, avgTokensPerSecond: null, totalCost: null }] });
       }
     };
-    fixture.pointerSettings.navigate("/usage");
+    fixture.pointerSettings.navigate("/dashboard");
   });
   await expect(settings.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
   await expect(settings.locator(".kpi-grid strong").first()).toHaveText("0");
@@ -31,7 +31,7 @@ test("merged routes preserve filters, encoded comparison IDs and current respons
   await expect(settings.locator(".kpi-grid strong").first()).toHaveText("7");
   await settings.getByLabel("Group table by").selectOption("provider");
   await expect(settings.getByRole("heading", { name: "Grouped by provider" })).toBeVisible();
-  await page.evaluate(() => (window as any).pointerSettings.navigate("/compare"));
+  await page.evaluate(() => (window as any).pointerSettings.navigate("/test-model"));
   await expect(settings.getByRole("heading", { name: "Test model", exact: true })).toBeVisible();
   await settings.getByRole("button", { name: "Compare recorded usage" }).click();
   await expect(settings.getByText("Enter one to five comma-separated IDs.")).toBeVisible();
@@ -39,10 +39,6 @@ test("merged routes preserve filters, encoded comparison IDs and current respons
   await settings.getByRole("button", { name: "Compare recorded usage" }).click();
   await expect(settings.getByRole("cell", { name: "model/provider/a/b", exact: true })).toBeVisible();
   expect(await page.evaluate(() => (window as any).comparedId)).toBe("model/provider/a/b");
-  for (const [route, title] of [["/diagnostics", "Overview"], ["/chat", "Test model"]]) {
-    await page.evaluate(route => (window as any).pointerSettings.navigate(route), route);
-    await expect(settings.getByRole("heading", { name: title, exact: true })).toBeVisible();
-  }
   const navigation = page.locator("#pointer-one").getByRole("navigation");
   for (const name of ["Usage", "Compare", "Request diagnostics", "Proxy Test"]) await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
 });
@@ -86,7 +82,7 @@ test("combined Settings screens retain localized drafts, warnings and API values
   await page.evaluate(() => (window as any).pointerSettings.setLocale("de-DE"));
   await expect(settings.getByLabel("Anbieter suchen", { exact: true })).toHaveValue("Provider draft");
   await expect(settings.getByRole("heading", { name: "Keine passenden Anbieter", exact: true })).toBeVisible();
-  await page.evaluate(() => { (window as any).pointerSettings.setLocale("ru-RU"); (window as any).pointerSettings.navigate("/usage"); });
+  await page.evaluate(() => { (window as any).pointerSettings.setLocale("ru-RU"); (window as any).pointerSettings.navigate("/dashboard"); });
   await expect(settings.getByRole("heading", { name: "Обзор", exact: true })).toBeVisible();
   await settings.locator("#usage-entity").selectOption("provider");
   await settings.locator("#usage-entity-id").fill("synthetic-provider");
@@ -100,7 +96,7 @@ test("combined Settings screens retain localized drafts, warnings and API values
   await expect(settings.getByRole("heading", { name: "Übersicht", exact: true })).toBeVisible();
   await expect(settings.locator("#usage-entity")).toHaveValue("provider");
   await expect(settings.locator("#usage-entity-id")).toHaveValue("synthetic-provider");
-  await page.evaluate(() => (window as any).pointerSettings.navigate("/compare"));
+  await page.evaluate(() => (window as any).pointerSettings.navigate("/test-model"));
   await expect(settings.getByRole("heading", { name: "Modell testen", exact: true })).toBeVisible();
   await settings.locator("#compare-ids").fill("model/provider/a/b");
   await page.evaluate(() => (window as any).pointerSettings.setLocale("fr-FR"));

@@ -44,7 +44,7 @@ export async function syncCanonicalCatalog() {
     const syncedAt = new Date();
 
     const fingerprint = catalogContentHash({
-      algorithm: "legacy-projection-v1",
+      algorithm: "model-catalog-projection-v1",
       references: catalogInventoryHash(references),
       benchmarks: catalogInventoryHash(benchmarks),
       providers: catalogInventoryHash(providerModels),
@@ -52,7 +52,7 @@ export async function syncCanonicalCatalog() {
     const fingerprintKey = "internal_catalog_projection_fingerprint";
     const [previous] = await tx.select().from(schema.systemSettings).where(eq(schema.systemSettings.key, fingerprintKey));
     if (previous?.value === fingerprint) {
-      // Provider discovery can upgrade these two legacy fields independently
+      // Provider discovery can upgrade these two model_catalog fields independently
       // of the projection. An unchanged input hash must not suppress repair of
       // that drift; all other projection fields have a single writer here.
       const capabilities = await tx.select({ id: schema.modelCatalog.modelId,

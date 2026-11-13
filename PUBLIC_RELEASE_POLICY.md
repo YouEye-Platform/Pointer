@@ -14,7 +14,7 @@ network-denied and unsigned; releases are checked by SHA-256 digest.
 Distribution, appliance integration, and trust decisions are external platform
 responsibilities.
 
-The repository's managed build manifest remains `youeye.build.v2` with its
+The repository's managed build manifest remains `youeye.build.v1` with its
 current `build_kind`, validation/profile values, trust boundaries, output role,
 and supported executor identity. Do not substitute a new executor identity in
 source. The only requested external platform action is registration of the

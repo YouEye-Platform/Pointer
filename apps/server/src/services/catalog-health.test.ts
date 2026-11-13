@@ -48,7 +48,7 @@ describe("catalog foundation", () => {
     }
   });
 
-  test("captures the legacy fallback naming regression without accepting it", () => {
+  test("captures the fallback naming regression without accepting it", () => {
     const glm = IDENTITY_FIXTURES.find((fixture) => fixture.id === "glm-5.1-cross-provider")!;
     expect(glm.expectedNames).toEqual(["GLM 5.1"]);
     expect(friendlyModelName("glm-5.1")).toBe("Glm 5 1");

@@ -28,8 +28,9 @@ Requirements: Node.js 22.23.2, pnpm 10.6.2, Bun 1.4.2 and PostgreSQL 17.
 ```bash
 pnpm install
 cp apps/server/.env.example apps/server/.env
-# Fill the local-only values in apps/server/.env.
-pnpm --filter @pointer/server db:push
+# Fill the local-only values in apps/server/.env, then create the database.
+createdb pointer_dev
+pnpm --filter @pointer/server db:migrate --expect-database pointer_dev
 pnpm dev:server
 ```
 

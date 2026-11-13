@@ -16,7 +16,7 @@ public request
 ```
 
 The boundary accepts OpenAI Chat Completions, Anthropic Messages, OpenAI Responses, and Google
-GenerateContent. There is no engine selector, shadow evaluation, alternate translator, or legacy
+GenerateContent. There is no engine selector, shadow evaluation, alternate translator, or untranslated
 passthrough path.
 
 ## Request IR
