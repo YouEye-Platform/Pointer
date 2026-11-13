@@ -38,7 +38,7 @@ const reference: NormalizedReferenceModel = {
   provenance,
 };
 
-describe("legacy catalog projection PostgreSQL integration", () => {
+describe("model_catalog projection PostgreSQL integration", () => {
   beforeAll(async () => {
     if (process.env.CATALOG_POSTGRES_TEST !== "1") return;
     assertCatalogPostgresTestDatabase();
@@ -68,7 +68,7 @@ describe("legacy catalog projection PostgreSQL integration", () => {
     });
   });
 
-  integrationTest("identical persisted inputs preserve legacy rows and alias identities", async () => {
+  integrationTest("identical persisted inputs preserve projection rows and alias identities", async () => {
     await syncCanonicalCatalog();
     const first = await db.select().from(schema.modelCatalog);
     const aliases = await db.select().from(schema.modelAliases);

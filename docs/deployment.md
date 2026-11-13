@@ -68,7 +68,7 @@ package metadata, and a source-bound release manifest. It is unsigned and
 checked by SHA-256 digest; the managed host executes the bundled
 runtime without downloading an unpinned language runtime.
 
-The managed build keeps the current `youeye.build.v2` manifest, build kind,
+The managed build keeps the current `youeye.build.v1` manifest, build kind,
 validation and provenance profiles, trust boundary, output role, and supported
 executor identity. Registering that executor as public-neutral is a narrow
 external build-registry action; it is not a source change.
@@ -128,11 +128,13 @@ runuser -u postgres -- env 'DATABASE_URL=postgresql:///pointer?host=/var/run/pos
 ```
 
 The runner uses a transaction-scoped advisory lock, distinguishes fresh,
-supported legacy, current and unsupported schemas, initializes a fresh
-database from the packaged baseline, applies reviewed numeric SQL migrations
-once and records their versions. It refuses a mismatched database name, a
-future schema, an ambiguous partial schema or a role without migration
-privileges. Never use `db:push` against production.
+current and unsupported schemas, initializes a fresh database from the
+packaged `0001_baseline.sql`, applies each later numbered SQL migration once
+and records its version. It refuses a mismatched database name, a future
+schema, Pointer tables without version records, an ambiguous partial schema
+or a role without migration privileges. A database from a pre-release Pointer
+(schema versions up to 27, before the version 1 baseline) is refused as newer
+than the release; it needs a fresh Pointer install.
 
 When PostgreSQL is remote, use an equivalently privileged protected connection
 without putting its credentials in shell history or process arguments. Test

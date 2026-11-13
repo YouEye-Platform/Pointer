@@ -331,7 +331,9 @@ async function enrichEntries(entries: GroupEntry[], userId: string) {
 
   return entries.map((entry) => {
     const exact = entry.providerModelKey ? modelByKey.get(entry.providerModelKey) : null;
-    const legacyCandidates = exact ? [] : providerModels.filter((model) =>
+    // Entries lose their exact key when the provider model row goes away
+    // (ON DELETE SET NULL); fall back to one unambiguous model ID match.
+    const fallbackCandidates = exact ? [] : providerModels.filter((model) =>
       model.providerId === entry.providerId
       && [
         model.id,
@@ -341,7 +343,7 @@ async function enrichEntries(entries: GroupEntry[], userId: string) {
         model.catalogEntityId,
       ].some((value) => value === entry.modelId)
     );
-    const providerModel = exact ?? (legacyCandidates.length === 1 ? legacyCandidates[0] : null);
+    const providerModel = exact ?? (fallbackCandidates.length === 1 ? fallbackCandidates[0] : null);
     const catalogEntityId = entry.catalogEntityId ?? providerModel?.catalogEntityId ?? null;
     const entity = catalogEntityId ? entityById.get(catalogEntityId) : null;
     const provider = providerById.get(entry.providerId);

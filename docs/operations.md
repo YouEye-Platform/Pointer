@@ -75,8 +75,7 @@ decrypted credential during validation.
 
 If no schema changed, repoint `current` to `previous`, reload systemd and
 restart the three services. If a migration is not backward compatible, stop
-writers before restoring the verified pre-deploy database backup. The legacy
-web LXC may remain a temporary front-end rollback target, but never run two
+writers before restoring the verified pre-deploy database backup. Never run two
 background-enabled server releases against the same database.
 
 After rollback, verify health, readiness, login, catalog counts, provider

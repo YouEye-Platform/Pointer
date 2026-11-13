@@ -50,7 +50,7 @@ export function parseProviderCredential(value: string): ParsedProviderCredential
       return { kind: "invalid-oauth2" };
     }
   } catch {
-    // Legacy provider keys are deliberately plain strings after decryption.
+    // API keys are stored as plain strings; only OAuth uses the JSON envelope.
   }
   return { kind: "api-key", value };
 }

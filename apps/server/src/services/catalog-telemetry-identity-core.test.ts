@@ -5,9 +5,9 @@ describe("catalog telemetry identities", () => {
   test("expands an entity to its distinct compatible telemetry IDs", () => {
     expect(unambiguousTelemetryModelIds("model/current", [
       { value: "provider/raw", entityId: "model/current" },
-      { value: "legacy/canonical", entityId: "model/current" },
+      { value: "historical/canonical", entityId: "model/current" },
       { value: "provider/raw", entityId: "model/current" },
-    ])).toEqual(["model/current", "legacy/canonical", "provider/raw"]);
+    ])).toEqual(["model/current", "historical/canonical", "provider/raw"]);
   });
 
   test("excludes identifiers associated with more than one entity", () => {

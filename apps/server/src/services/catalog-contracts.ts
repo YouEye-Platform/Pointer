@@ -125,7 +125,7 @@ export const benchmarkDescriptorSchema = z.object({
   attribution: z.string().nullable(),
 });
 
-export const legacyCatalogPresentationSchema = z.object({
+export const modelCatalogPresentationSchema = z.object({
   entityId: z.string().min(1),
   currentName: z.string().min(1),
   currentCreator: nullableText,
@@ -146,7 +146,7 @@ export const catalogCorpusSchema = z.object({
   benchmarkLinks: z.array(catalogBenchmarkLinkSchema),
   aliases: z.array(catalogAliasClaimSchema),
   sources: z.array(catalogSourceStateSchema),
-  legacyPresentation: z.array(legacyCatalogPresentationSchema),
+  modelCatalogPresentation: z.array(modelCatalogPresentationSchema),
 });
 
 export const catalogApiProviderSchema = z.object({

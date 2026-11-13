@@ -111,7 +111,7 @@ Unknown price is `null`, never zero. Negative sentinels are invalid.
 
 ## Analytics linkage
 
-Usage records persist `catalog_entity_id` at request time. The `0009_usage_catalog_entity.sql` migration backfills only provider/model combinations that resolve to exactly one entity. Ambiguous historical rows remain null. Statistics use direct entity attribution first and unambiguous historical aliases only as fallback.
+Usage records persist `catalog_entity_id` at request time; rows without one keep it null. Statistics use direct entity attribution first and unambiguous historical aliases only as fallback.
 
 ## Operations
 
@@ -124,14 +124,10 @@ Admin routes:
 
 Reconciliation is serialized by a PostgreSQL advisory lock. Failed attempts are recorded without changing the active pointer. Garbage collection protects the active generation, recent history, reviewed decisions, and redirect dependencies.
 
-## Migration notes
+## Schema
 
-`0006_catalog_foundation.sql` and `0007_catalog_reconciliation.sql` establish the generation model.
-`0008_dynamic_catalog_names.sql` adds source-backed naming claims.
-`0009_usage_catalog_entity.sql` adds stable telemetry identity.
-`0010_remove_pre_release_legacy_views.sql` removes superseded pre-release compatibility views.
-`0012_benchmark_source_credentials.sql` adds isolated encrypted benchmark credentials. Schema
-changes preserve users, providers, credentials, models, instances, groups, keys, and usage history.
-`0015_model_group_catalog_identity.sql` establishes one default group per user-with-groups and adds
-stable canonical-entity plus exact provider-model identity to group entries without removing the
-legacy rollback columns.
+The generation model, source-backed naming claims, stable telemetry identity, isolated encrypted
+benchmark credentials and exact group identities (one default group per user, canonical entity plus
+exact provider-model key on group entries) are all part of the schema baseline
+`apps/server/drizzle/0001_baseline.sql`.
+

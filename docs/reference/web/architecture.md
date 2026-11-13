@@ -79,7 +79,7 @@ Provider authentication failures must remain provider errors. They must not be t
 management-session failure.
 
 Provider authentication controls are capability-driven. Pointer web renders Pointer server's declared API-key,
-generic OAuth device-flow, or legacy compatibility path; it never owns an OAuth client, token
+generic OAuth device-flow, or Codex-specific sign-in path; it never owns an OAuth client, token
 endpoint, device code, refresh policy, or provider credential. Device polling calls Pointer server only and
 uses Pointer server's returned interval. See [subscription-provider-ui.md](./subscription-provider-ui.md).
 

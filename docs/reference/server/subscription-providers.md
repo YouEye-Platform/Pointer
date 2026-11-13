@@ -85,7 +85,7 @@ provider ID, so a flow identifier alone is not an authorization capability.
 
 Completed OAuth credentials reuse the encrypted `provider_keys.api_key_encrypted` column so current
 ownership, cascades, catalog availability, and deletion behavior stay intact. The decrypted value is
-either a legacy opaque API key or a marked version-1 OAuth envelope containing the access token,
+either an opaque API key or a marked version-1 OAuth envelope containing the access token,
 optional rotating refresh token, expiry, safe provider user identifier, issuer, and public client
 identifier.
 
@@ -163,7 +163,7 @@ Automated acceptance covers:
 - model discovery across all three native protocols;
 - additive migration and ciphertext-only pending state;
 - Pointer web add/connect/poll/success behavior with no credential input or rendered token;
-- normal API-key provider and legacy Codex regression coverage.
+- normal API-key provider and Codex-specific flow regression coverage.
 
 Live owner acceptance completed on 2026-07-28. The connected account reported a safe `fresh` state,
 the `GrokPro` tier, no blocked flag, and one discovered `grok-4.5` model using the Responses

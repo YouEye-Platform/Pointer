@@ -160,9 +160,9 @@ comparison of up to five model or provider IDs. Recorded comparison reads existi
 usage; it does not send prompts. IDs containing slashes remain encoded query
 values. Live tests retain their original provider-account selection and limits.
 
-Old `/usage` and `/diagnostics` URLs resolve to Overview; `/compare` and `/chat`
-resolve to Test model. Request diagnostics and Proxy test are no longer separate
-screens. Their removal does not remove server telemetry or change authorization.
+Usage and request diagnostics are part of Overview; recorded comparison and the
+proxy test are part of Test model. Server telemetry and authorization are
+unchanged.
 
 Loading placeholders follow the content: model tables include their actual
 selected benchmark columns, grid view uses cards, Instances/API and API keys use

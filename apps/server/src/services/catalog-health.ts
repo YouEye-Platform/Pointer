@@ -68,7 +68,7 @@ export function analyzeCatalogCorpus(input: unknown): CatalogHealthReport {
   const missingAssets = activeEntities
     .filter((row) => !row.organizationId || !organizationsWithAssets.has(row.organizationId))
     .map((row) => row.id).sort(compare);
-  const iconFallbacks = corpus.legacyPresentation.filter((row) => row.iconOutcome === "fallback" && activeEntityIds.has(row.entityId))
+  const iconFallbacks = corpus.modelCatalogPresentation.filter((row) => row.iconOutcome === "fallback" && activeEntityIds.has(row.entityId))
     .map((row) => row.entityId).sort(compare);
   const suspiciousNames = activeEntities.map((row) => ({ entityId: row.id, name: row.preferredName, reasons: suspiciousNameReasons(row.preferredName) }))
     .filter((row) => row.reasons.length > 0).sort((a, b) => compare(a.entityId, b.entityId));

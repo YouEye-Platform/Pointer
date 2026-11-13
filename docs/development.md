@@ -87,6 +87,29 @@ managed manifest consume that shared value. Do not bump it for a release with
 no schema change. Published versions retain their original source identity;
 release changed source under a new version rather than replacing an artifact.
 
+## Database schema and migrations
+
+`apps/server/drizzle/0001_baseline.sql` creates the complete schema of a fresh
+database (schema version 1). `scripts/migrate.ts` applies every migration above
+the version recorded in `pointer_schema_versions` and refuses anything else:
+gaps, a database newer than the release, or Pointer tables without version
+records.
+
+To change the schema, write the next migration by hand:
+
+1. Add `apps/server/drizzle/0002_<name>.sql` (lower-case words joined by `_`),
+   written to run once inside the runner's transaction on a database at the
+   previous version.
+2. Raise `LATEST_POINTER_SCHEMA_VERSION` in
+   `apps/server/src/db/latest-schema.mjs` (and its `.d.mts`) to the new number.
+3. Update `apps/server/src/db/schema.ts` so the Drizzle schema matches.
+4. Migrate a scratch database, run the PostgreSQL-backed tests against it
+   (`pnpm test:postgres`) and add assertions for new constraints to
+   `apps/server/src/db/baseline.test.ts` or a PostgreSQL-backed test.
+
+Never edit `0001_baseline.sql` after the Release; before the Release it may be
+regenerated from a migrated database (`pg_dump --schema-only`).
+
 Artifact scripts refuse a dirty worktree:
 
 ```bash
@@ -96,22 +119,20 @@ pnpm artifact:verify
 ```
 
 Outputs are written to `.artifacts/` and are intentionally ignored by Git.
-The server artifact contains source, CLI, the current-schema baseline, reviewed
-numeric migrations, the guarded migration runner and resolved dependencies so
+The server artifact contains source, CLI, the numbered schema migrations
+(starting with the baseline), the guarded migration runner and resolved dependencies so
 Bun can load provider handlers dynamically and the exact release can apply its
 schema. The web artifact is Next.js standalone output.
 
-For an empty local database, initialize it through the same controlled runner
-used for releases:
+Create a development database with the same runner used for releases
+(`db:migrate`):
 
 ```bash
+createdb pointer_dev
 cd apps/server
 DATABASE_URL='postgresql:///pointer_dev?host=/var/run/postgresql' \
-  bun run scripts/migrate.ts --expect-database pointer_dev
+  bun run db:migrate --expect-database pointer_dev
 ```
-
-`db:push` is only a development schema-diff aid. It is not a production
-migration command.
 
 ## Codex model discovery
 

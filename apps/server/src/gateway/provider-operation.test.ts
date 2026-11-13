@@ -25,7 +25,7 @@ describe("provider gateway operations", () => {
     }))).toEqual({ operation: "generate", format: "responses", endpoint: "/responses", declaration: "manifest" });
   });
 
-  test("the declared endpoint overrides a legacy endpoint for the same format", () => {
+  test("the declared operation overrides a wire endpoint for the same format", () => {
     expect(resolveProviderGatewayOperation(manifest({
       type: "anthropic-compatible",
       endpoints: { messages: "/v1/messages" },
@@ -36,7 +36,7 @@ describe("provider gateway operations", () => {
   test("builds request URLs from the declared endpoint", () => {
     const configured = manifest({
       baseUrl: "https://fixtures.invalid/root/",
-      endpoints: { chatCompletions: "/legacy/chat/completions" },
+      endpoints: { chatCompletions: "/wire/chat/completions" },
       gateway: { operations: { generate: { format: "responses", endpoint: "/gateway/responses" } } },
     });
     expect(resolveProviderGatewayEndpoint(configured)).toBe("/gateway/responses");
@@ -103,7 +103,7 @@ describe("provider gateway operations", () => {
     );
   });
 
-  test("legacy custom providers use endpoints without inspecting auth", () => {
+  test("custom providers without an operation use their endpoints without inspecting auth", () => {
     const oauthChat = resolveProviderGatewayOperation(manifest({
       auth: { type: "oauth-device-flow" },
       endpoints: { chatCompletions: "/chat/completions" },

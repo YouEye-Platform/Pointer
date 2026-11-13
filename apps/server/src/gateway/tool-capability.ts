@@ -66,13 +66,14 @@ export function recordDiscoveredToolEvidence(model: Record<string, unknown>, pre
   return { ...current, pointer_tool_evidence: evidence };
 }
 
-/** Reconcile legacy inferred false without erasing a boolean present in raw evidence. */
+/** Treat a stored false without raw evidence as unknown, without erasing a boolean present in raw evidence. */
 export function persistedToolCapability(raw: unknown, stored: boolean | null | undefined, fallback?: boolean, observedAt: string | null = null): ToolCapability {
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const evidence = discoveredToolCapability(raw as Record<string, unknown>, fallback, observedAt);
     if (evidence.status !== "unknown") return evidence;
-    // Legacy sync promoted positive manifest/catalog evidence into the column.
-    if (stored === true) return toolCapability(true, "legacy.persisted-positive", observedAt);
+    // Provider handlers and catalog sync can set the column from evidence the
+    // discovery reader does not know (for example a handler's own tool flag).
+    if (stored === true) return toolCapability(true, "persisted.positive", observedAt);
     return evidence;
   }
   return toolCapability(stored, "persisted", observedAt);

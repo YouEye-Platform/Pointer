@@ -168,5 +168,5 @@ the original Responses item, including its identity, summary and ciphertext.
 Buffered and streamed responses use the same envelope. This does not decrypt
 state or manufacture a native thinking signature. Untagged native Messages
 ciphertext remains Messages-scoped; malformed envelopes and incompatible
-origins are rejected. Legacy translated ciphertext without an origin envelope
+origins are rejected. Translated ciphertext without an origin envelope
 cannot be safely relabelled and still fails cross-format replay.

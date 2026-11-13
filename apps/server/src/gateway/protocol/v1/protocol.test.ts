@@ -290,7 +290,7 @@ describe("Gateway protocol core typing", () => {
   test("contains no untyped payload annotations outside the audited V1 boundary", async () => {
     const directory = import.meta.dir;
     const protocolFiles = (await readdir(directory))
-      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts") && file !== "legacy.ts")
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
       .map((file) => join(directory, file));
     const files = [
       ...protocolFiles,

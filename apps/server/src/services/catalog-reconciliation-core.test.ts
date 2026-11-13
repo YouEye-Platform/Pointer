@@ -470,9 +470,9 @@ describe("catalog reconciliation core", () => {
       currentEntities: [{ id: "model/a", stableSlug: "models/a" }, { id: "model/b", stableSlug: "models/b" }],
       historicalEntities: [{ id: "model/a", stableSlug: "models/a" }, { id: "model/b", stableSlug: "models/b" }],
       currentRemaps: [{ previousEntityId: "model/a", entityId: "model/b" }],
-      historicalAliases: [{ alias: "models/legacy-a", entityId: "model/a" }],
+      historicalAliases: [{ alias: "models/previous-a", entityId: "model/a" }],
     });
-    expect(redirects).toContainEqual({ alias: "models/legacy-a", entityId: "model/a" });
+    expect(redirects).toContainEqual({ alias: "models/previous-a", entityId: "model/a" });
   });
 
   test("preserves intermediate published IDs when reconciling after rollback", () => {

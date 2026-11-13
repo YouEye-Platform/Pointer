@@ -21,9 +21,8 @@ import { useAuth } from "../lib/store";
 import { navigate, setNavigationCallback, usePathname } from "./navigation";
 
 const routes: Record<string, React.ComponentType> = {
-  diagnostics: Dashboard, routing: Routing, dashboard: Dashboard, connections: Connections, models: Models, groups: Groups,
-  instances: Instances, keys: Keys, usage: Dashboard, compare: TestModel, chat: TestModel,
-  "test-model": TestModel, admin: Admin, providers: Providers,
+  routing: Routing, dashboard: Dashboard, connections: Connections, models: Models, groups: Groups,
+  instances: Instances, keys: Keys, "test-model": TestModel, admin: Admin, providers: Providers,
 };
 const details: Record<string, React.ComponentType> = { models: Model, groups: Group, instances: Instance, keys: Key, providers: Provider };
 function App() {

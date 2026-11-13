@@ -763,7 +763,7 @@ describe.skipIf(!enabled)("managed platform PostgreSQL lifecycle", () => {
       displayName: "Fixture AI application",
       appVersion: "1.0.0",
       groupId: defaultGroupId,
-      adapterRevision: "fixture-v1",
+      adapterRevision: "fixture-rev-1",
     };
     const first = await request(
       `/api/platform/v1/installations/${externalInstallationId}`,
@@ -818,7 +818,7 @@ describe.skipIf(!enabled)("managed platform PostgreSQL lifecycle", () => {
           ...body,
           displayName: "Updated fixture application",
           appVersion: "1.1.0",
-          adapterRevision: "fixture-v2",
+          adapterRevision: "fixture-rev-2",
         }),
       }
     );
@@ -828,7 +828,7 @@ describe.skipIf(!enabled)("managed platform PostgreSQL lifecycle", () => {
         app: {
           displayName: "Updated fixture application",
           version: "1.1.0",
-          adapterRevision: "fixture-v2",
+          adapterRevision: "fixture-rev-2",
         },
       },
       credentialDelivery: null,

@@ -824,11 +824,6 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--focus); outline
 .catalog-benchmarks summary { padding: 8px 0 12px; cursor: pointer; color: var(--muted); }
 .catalog-benchmarks .benchmark-toggle { margin-block: 4px 16px; }
 .pointer-page[data-screen="usage"] .catalog-controls { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-.pointer-page[data-screen="diagnostics"] .catalog-controls { grid-template-columns: minmax(180px, 2fr) minmax(160px, 1fr); }
-.pointer-page[data-screen="diagnostics"] article { margin-bottom: 16px; overflow-wrap: anywhere; }
-.pointer-page[data-screen="diagnostics"] article p { color: var(--muted); }
-.pointer-page[data-screen="diagnostics"] article .error { color: var(--danger); }
-.pointer-page[data-screen="diagnostics"] article details { padding-top: 12px; border-top: 1px solid var(--border); }
 .pointer-page[data-screen="routing"] .connection-form { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 .pointer-page[data-screen="routing"] .connection-form > button { justify-self: start; }
 .pointer-page[data-screen="routing"] section label { margin-block: 16px; }

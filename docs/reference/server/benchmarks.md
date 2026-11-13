@@ -109,6 +109,6 @@ through `GET /api/sources` and start an allowlisted refresh through `POST /api/s
 Refresh requests coalesce per source. Empty, malformed, oversized, timed-out, or upstream-error
 responses do not replace the last-known-good snapshot.
 
-After upgrading, apply `0012_benchmark_source_credentials.sql` using the production migration
-procedure. Rotation of `ENCRYPTION_SECRET` also invalidates stored benchmark credentials, so remove
+Benchmark credentials live in `benchmark_source_credentials` (encrypted, no PUBLIC grants).
+Rotation of `ENCRYPTION_SECRET` also invalidates stored benchmark credentials, so remove
 and re-add the Artificial Analysis key after any intentional rotation.
