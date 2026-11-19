@@ -68,7 +68,8 @@ sidecar. Health/version responses expose component, version, repository,
 branch, commit and build time so mixed releases can be detected.
 
 The YouEye release (`.youeye/build/pointer`) builds `standalone.tar` for the
-build version `X.Y.Z-dev.N` given as `YOUEYE_VERSION`. Its `product-release.json`
+dev build `X.Y.Z-dev.N` given as `YOUEYE_VERSION`; what it builds names only the
+line `X.Y.Z` and the git tree. Its `product-release.json`
 binds the archive and `pointer-build-contract.json` by SHA-256 and the source
 git tree; promotion between channels copies the same bytes without rebuilding.
 

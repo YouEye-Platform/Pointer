@@ -12,14 +12,17 @@ source_epoch=${SOURCE_DATE_EPOCH:-}
 [[ -d $source_dir ]] || fail 'YOUEYE_SOURCE_DIR must be an existing source directory'
 [[ -n $output_dir && $output_dir != / && $output_dir != "$source_dir" ]] || fail 'YOUEYE_OUTPUT_DIR must be dedicated'
 [[ -n $work_dir && $work_dir != / && $work_dir != "$source_dir" ]] || fail 'YOUEYE_WORK_DIR must be dedicated'
-[[ -z $source_tree || $source_tree =~ ^[0-9a-f]{40}$ ]] || fail 'YOUEYE_SOURCE_TREE must be a 40-hex git tree'
 [[ $source_epoch =~ ^[1-9][0-9]*$ ]] || fail 'SOURCE_DATE_EPOCH must be positive'
 if [[ -e $source_dir/.git ]]; then
-  [[ -z $source_tree || $(git -C "$source_dir" rev-parse 'HEAD^{tree}') == "$source_tree" ]] || fail 'checked-out tree does not match YOUEYE_SOURCE_TREE'
+  git_tree=$(git -C "$source_dir" rev-parse 'HEAD^{tree}')
+  [[ -z $source_tree || $git_tree == "$source_tree" ]] || fail 'checked-out tree does not match YOUEYE_SOURCE_TREE'
+  source_tree=$git_tree
 else
   # Permanent executor receives a credential-free git-archive export, not a live checkout.
   [[ -f $source_dir/apps/server/package.json ]] || fail 'credential-free source export is incomplete'
 fi
+# A build is identified by its git tree, the same on every host (required for an export).
+[[ $source_tree =~ ^[0-9a-f]{40}$ ]] || fail 'YOUEYE_SOURCE_TREE must be a 40-hex git tree'
 require node
 require pnpm
 require bun
@@ -30,14 +33,19 @@ require tar
 [[ -n ${YOUEYE_PNPM_STORE_DIR:-} && -d $YOUEYE_PNPM_STORE_DIR ]] || fail 'reviewed pnpm store is required'
 
 export LANG=C.UTF-8 LC_ALL=C.UTF-8 TZ=UTC
-# VERSION holds the release line X.Y.Z; the release tool passes the full build version
-# (X.Y.Z-dev.N) as YOUEYE_VERSION. Nothing in the source tree carries the build number.
+# VERSION holds the release line X.Y.Z; the release tool passes the build name
+# (X.Y.Z-dev.N, the dev release's name) as YOUEYE_VERSION. The build only checks it
+# against VERSION: what it bakes (bun build --define) and writes (release-manifest.json,
+# pointer-build-contract.json) names the line (YOUEYE_LINE) and the git tree
+# (YOUEYE_SOURCE_TREE), never the build name, so the same files can be promoted under
+# other names. YOUEYE_VERSION is unset for the rest of the build.
 line=$(tr -d '[:space:]' < "$source_dir/VERSION" 2>/dev/null || true)
 [[ $line =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || fail 'VERSION must hold the release line X.Y.Z'
-[[ -n ${YOUEYE_VERSION:-} ]] || fail "YOUEYE_VERSION is required: the full build version, e.g. $line-dev.1 (Tools/release/app-release assigns it)"
+[[ -n ${YOUEYE_VERSION:-} ]] || fail "YOUEYE_VERSION is required: the build name, e.g. $line-dev.1 (Tools/release/app-release assigns it)"
 [[ $YOUEYE_VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-dev\.[1-9][0-9]*$ ]] || fail "YOUEYE_VERSION must be X.Y.Z-dev.N; got $YOUEYE_VERSION"
 [[ ${YOUEYE_VERSION%%-*} == "$line" ]] || fail "YOUEYE_VERSION $YOUEYE_VERSION is not on the VERSION line $line"
-export YOUEYE_VERSION
+unset YOUEYE_VERSION
+export YOUEYE_LINE=$line YOUEYE_SOURCE_TREE=$source_tree
 stage=$work_dir/pointer-standalone
 rm -rf -- "$stage"
 install -d -m 0755 "$stage" "$output_dir"
@@ -47,7 +55,7 @@ pnpm public-source:check
 pnpm typecheck
 pnpm contracts:check
 pnpm test:unit
-bun build apps/server/src/index.ts --target=bun --external=@pointer/engine --define "process.env.YOUEYE_VERSION=\"$YOUEYE_VERSION\"" --outfile="$stage/server.js"
+bun build apps/server/src/index.ts --target=bun --external=@pointer/engine --define "process.env.YOUEYE_LINE=\"$YOUEYE_LINE\"" --define "process.env.YOUEYE_SOURCE_TREE=\"$YOUEYE_SOURCE_TREE\"" --outfile="$stage/server.js"
 bun build apps/server/scripts/migrate.ts --target=bun --outfile="$stage/migrate.js"
 bun build apps/server/scripts/transition-managed-identity.ts --target=bun --outfile="$stage/transition-managed-identity.js"
 bun build apps/server/scripts/import-provider-state.ts --target=bun --external=@pointer/engine --outfile="$stage/import-provider-state.js"

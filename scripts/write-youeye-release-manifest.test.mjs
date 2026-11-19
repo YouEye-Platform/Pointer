@@ -6,6 +6,9 @@ import { PUBLIC_CANONICAL_REPOSITORY } from "./release-identity.mjs";
 import { LATEST_POINTER_SCHEMA_VERSION } from "../apps/server/src/db/latest-schema.mjs";
 
 const script = resolve(import.meta.dir, "write-youeye-release-manifest.mjs");
+const line = readFileSync(resolve(import.meta.dir, "../VERSION"), "utf8").trim();
+const otherLine = `${Number(line.split(".")[0]) + 1}.0.0`;
+const tree = "0123456789abcdef0123456789abcdef01234567";
 const created = [];
 
 afterEach(() => {
@@ -18,10 +21,12 @@ function outputDirectory() {
   return directory;
 }
 
-async function runManifest(directory, version) {
-  const env = { ...process.env };
-  delete env.YOUEYE_VERSION;
-  if (version !== undefined) env.YOUEYE_VERSION = version;
+async function runManifest(directory, version, sourceTree = tree) {
+  const env = { ...process.env, YOUEYE_VERSION: `${line}-dev.3` };
+  delete env.YOUEYE_LINE;
+  delete env.YOUEYE_SOURCE_TREE;
+  if (version !== undefined) env.YOUEYE_LINE = version;
+  if (sourceTree !== null) env.YOUEYE_SOURCE_TREE = sourceTree; // null: unset
   const child = Bun.spawn(["bun", script, directory], {
     cwd: resolve(import.meta.dir, ".."), env, stdout: "pipe", stderr: "pipe",
   });
@@ -29,11 +34,14 @@ async function runManifest(directory, version) {
 }
 
 describe("YouEye release manifest", () => {
-  test("records the build version, public identity and shared schema version", async () => {
+  test("records the line and tree (never a build name), public identity and shared schema version", async () => {
     const directory = outputDirectory();
-    expect((await runManifest(directory, "0.6.1-dev.3")).exitCode).toBe(0);
-    const manifest = JSON.parse(readFileSync(resolve(directory, "release-manifest.json"), "utf8"));
-    expect(manifest.version).toBe("0.6.1-dev.3");
+    expect((await runManifest(directory, line)).exitCode).toBe(0);
+    const text = readFileSync(resolve(directory, "release-manifest.json"), "utf8");
+    const manifest = JSON.parse(text);
+    expect(manifest.version).toBe(line);
+    expect(manifest.sourceTree).toBe(tree);
+    expect(text).not.toContain("-dev.");
     expect(manifest.repository).toBe(PUBLIC_CANONICAL_REPOSITORY);
     expect(manifest).not.toHaveProperty("branch");
     expect(manifest).not.toHaveProperty("commit");
@@ -43,11 +51,16 @@ describe("YouEye release manifest", () => {
     expect(manifest.entrypoints.ui).toBe('ui/manifest.json');
   });
 
-  test("refuses to write without a valid YOUEYE_VERSION", async () => {
-    for (const version of [undefined, "", "latest", "0.6.1-dev.0", "0.6.1", "0.6.1-rc.3", "v0.6.1"]) {
+  test("refuses to write without the VERSION line and a git tree", async () => {
+    for (const version of [undefined, "", "latest", `${line}-dev.3`, `${line}-rc.3`, `v${line}`, otherLine]) {
       const result = await runManifest(outputDirectory(), version);
       expect(result.exitCode).not.toBe(0);
-      expect(result.stderr).toContain("YOUEYE_VERSION");
+      expect(result.stderr).toContain("YOUEYE_LINE");
+    }
+    for (const sourceTree of [null, "", "abc", tree.toUpperCase()]) {
+      const result = await runManifest(outputDirectory(), line, sourceTree);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("YOUEYE_SOURCE_TREE");
     }
   });
 });

@@ -42,7 +42,8 @@ export function releaseMetadata() {
     branch,
     commit,
     builtAt: new Date().toISOString(),
-    version: `${process.env.YOUEYE_VERSION || readFileSync(resolve(root, "VERSION"), "utf8").trim()}+${commit.slice(0, 12)}`,
+    // The release line (VERSION) and the commit, never a build name (X.Y.Z-dev.N).
+    version: `${readFileSync(resolve(root, "VERSION"), "utf8").trim()}+${commit.slice(0, 12)}`,
   };
 }
 
