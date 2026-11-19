@@ -76,9 +76,11 @@ Commit the spec and generated TypeScript together. Do not hand-edit
 ## Release artifacts
 
 `VERSION` holds the release line (`X.Y.Z`); change it only to start the next
-line. Each build gets `X.Y.Z-dev.N` from the release tool through
-`YOUEYE_VERSION`; the standalone artifact scripts add the source commit suffix.
-No version is written into `package.json` or other tracked files.
+line. Each dev build is named `X.Y.Z-dev.N` by the release tool, which passes the
+name as `YOUEYE_VERSION`; the build checks it against `VERSION` and bakes and
+writes only the line and the git tree. The standalone artifact scripts write the
+line with the source commit suffix. No version is written into `package.json` or
+other tracked files.
 
 Schema versions describe database compatibility, not release numbers. When
 adding a numbered migration, also update

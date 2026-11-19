@@ -52,17 +52,20 @@ must preserve schema constraints and be checked against consumers.
 
 ## Versions and releases
 
-`VERSION` holds the release line (`X.Y.Z`). Every build is `X.Y.Z-dev.N`: the
-release tool picks the next free `N` from this repository's release tags and
-passes the full version to `.youeye/build/pointer` as `YOUEYE_VERSION`; the
-build fails without it. Nothing in the source tree carries the build number;
-the workspace `package.json` versions are the placeholder `0.0.0`. The build
-inlines the version into `server.js` and writes it into `release-manifest.json`,
-which it also emits as the release's `pointer-build-contract.json`.
+`VERSION` holds the release line (`X.Y.Z`). Every build is published on dev as
+`X.Y.Z-dev.N`: the release tool picks the next free `N` from this repository's
+release tags and passes that name to `.youeye/build/pointer` as
+`YOUEYE_VERSION`; the build fails without it or when it is not on the `VERSION`
+line, and uses it for that check only. Nothing in the source tree carries the
+build number; the workspace `package.json` versions are the placeholder `0.0.0`.
+The build inlines the line and the git tree (`YOUEYE_LINE`, `YOUEYE_SOURCE_TREE`)
+into `server.js` and writes them into `release-manifest.json`, which it also
+emits as the release's `pointer-build-contract.json`. No built file names a
+build.
 
-A build keeps its version on every channel (dev, alpha, beta, stable).
-Promotion copies the same bytes and never rebuilds. Release tags are
-`v<version>`. A release holds `standalone.tar`, `pointer-build-contract.json`
+Promotion copies the same bytes under the channel's name (`X.Y.Z-alpha.N`,
+`X.Y.Z-beta.N`, `X.Y.Z`) and never rebuilds; the box shows the installed
+release's name. Release tags are `v<version>`. A release holds `standalone.tar`, `pointer-build-contract.json`
 and `product-release.json`, which binds them by SHA-256 and the source git tree.
 
 ## Interface text
